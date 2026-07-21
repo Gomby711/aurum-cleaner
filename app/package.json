@@ -1,0 +1,55 @@
+{
+  "name": "aurum-cleaner",
+  "productName": "Aurum Cleaner",
+  "private": true,
+  "version": "0.1.0",
+  "description": "A premium, free storage-cleaning desktop app for Windows.",
+  "author": "Aurum Cleaner",
+  "main": "electron/main.cjs",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "dev:electron": "cross-env NODE_ENV=development electron .",
+    "dev:all": "concurrently -k -n VITE,ELECTRON -c blue,yellow \"npm:dev\" \"wait-on tcp:5173 && npm:dev:electron\"",
+    "build": "vite build",
+    "build:electron": "npm run build && electron-builder",
+    "lint": "oxlint",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "framer-motion": "^12.42.2",
+    "lucide-react": "^1.25.0",
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7",
+    "recharts": "^3.10.0",
+    "trash": "^10.1.1"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.17",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^6.0.3",
+    "concurrently": "^10.0.3",
+    "cross-env": "^10.1.0",
+    "electron": "^43.2.0",
+    "electron-builder": "^26.15.3",
+    "oxlint": "^1.71.0",
+    "vite": "^8.1.1",
+    "wait-on": "^9.1.0"
+  },
+  "build": {
+    "appId": "com.aurumcleaner.app",
+    "productName": "Aurum Cleaner",
+    "files": [
+      "dist/**/*",
+      "electron/**/*"
+    ],
+    "win": {
+      "target": "nsis",
+      "icon": "build/icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    }
+  }
+}
