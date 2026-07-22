@@ -2,7 +2,7 @@
   "name": "aurum-cleaner",
   "productName": "Aurum Cleaner",
   "private": true,
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "A premium, free storage-cleaning desktop app for Windows.",
   "author": "Aurum Cleaner",
   "main": "electron/main.cjs",

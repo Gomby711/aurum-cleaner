@@ -1,4 +1,5 @@
-import { Gem, Minus, Square, X } from 'lucide-react';
+import { Minus, Square, X } from 'lucide-react';
+import BrandMark from './BrandMark';
 
 export default function TitleBar() {
   const api = window.api;
@@ -17,7 +18,7 @@ export default function TitleBar() {
       }}
     >
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, paddingLeft: 14 }}>
-        <Gem size={15} color="var(--gold-500)" strokeWidth={2.2} />
+        <BrandMark size={17} />
         <span style={{ fontSize: 12.5, fontWeight: 700, letterSpacing: 0.6, color: 'var(--text-1)' }}>
           AURUM <span className="gold-text">CLEANER</span>
         </span>

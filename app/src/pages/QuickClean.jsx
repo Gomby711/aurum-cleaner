@@ -1,21 +1,33 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { RefreshCw, Sparkles, CheckCircle2 } from 'lucide-react';
 import PageShell from '../components/PageShell';
 import ConfirmModal from '../components/ConfirmModal';
 import { formatBytes } from '../lib/format';
+import { useNotify } from '../lib/notifications';
 
-export default function QuickClean() {
+export default function QuickClean({ active }) {
   const [categories, setCategories] = useState([]);
   const [selected, setSelected] = useState(new Set());
   const [scanning, setScanning] = useState(false);
   const [cleaning, setCleaning] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [result, setResult] = useState(null);
+  const notify = useNotify();
+  const activeRef = useRef(active);
+  const hasLoadedRef = useRef(false);
 
   useEffect(() => {
-    scan();
-  }, []);
+    activeRef.current = active;
+  }, [active]);
+
+  useEffect(() => {
+    if (active && !hasLoadedRef.current) {
+      hasLoadedRef.current = true;
+      scan();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [active]);
 
   async function scan() {
     setScanning(true);
@@ -24,6 +36,7 @@ export default function QuickClean() {
       const data = await window.api.quickClean.scan();
       setCategories(data);
       setSelected(new Set(data.filter((c) => c.exists && c.size > 0).map((c) => c.id)));
+      if (!activeRef.current) notify('Quick Clean scan finished.');
     } finally {
       setScanning(false);
     }
@@ -53,6 +66,7 @@ export default function QuickClean() {
     }
     setResult({ freed, errors });
     setCleaning(false);
+    if (!activeRef.current) notify(`Quick Clean freed ${formatBytes(freed)}.`);
     scan();
   }
 

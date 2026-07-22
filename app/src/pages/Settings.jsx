@@ -1,7 +1,14 @@
+import { useEffect, useState } from 'react';
 import { Gem, ShieldCheck, Heart } from 'lucide-react';
 import PageShell from '../components/PageShell';
 
 export default function Settings() {
+  const [version, setVersion] = useState(null);
+
+  useEffect(() => {
+    window.api?.app.getVersion().then(setVersion);
+  }, []);
+
   return (
     <PageShell title="Settings" subtitle="About Aurum Cleaner.">
       <div className="scroll-region" style={{ height: '100%', display: 'flex', flexDirection: 'column', gap: 16, maxWidth: 640 }}>
@@ -10,7 +17,7 @@ export default function Settings() {
             <Gem size={20} color="var(--gold-300)" />
           </div>
           <div>
-            <div style={{ fontSize: 16, fontWeight: 700 }}>Aurum Cleaner <span style={{ color: 'var(--text-2)', fontWeight: 500, fontSize: 12.5 }}>v0.1.0</span></div>
+            <div style={{ fontSize: 16, fontWeight: 700 }}>Aurum Cleaner {version && <span style={{ color: 'var(--text-2)', fontWeight: 500, fontSize: 12.5 }}>v{version}</span>}</div>
             <p style={{ fontSize: 13, color: 'var(--text-1)', marginTop: 8, lineHeight: 1.6 }}>
               A free, no-nonsense storage cleanup tool for Windows — Quick Clean for temp/cache junk,
               a WinDirStat-style Disk Analyzer, large-file and duplicate finders, plus a dedicated
