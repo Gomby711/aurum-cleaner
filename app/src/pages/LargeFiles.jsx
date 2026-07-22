@@ -1,12 +1,13 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Search, Trash2, FileWarning, CheckCircle2 } from 'lucide-react';
 import PageShell from '../components/PageShell';
 import ConfirmModal from '../components/ConfirmModal';
 import LocationBar from '../components/LocationBar';
 import { formatBytes, formatDate } from '../lib/format';
+import { useNotify } from '../lib/notifications';
 
-export default function LargeFiles({ drives, defaultRoot }) {
+export default function LargeFiles({ drives, defaultRoot, active }) {
   const [root, setRoot] = useState(defaultRoot);
   const [minSize, setMinSize] = useState(200);
   const [files, setFiles] = useState([]);
@@ -16,6 +17,12 @@ export default function LargeFiles({ drives, defaultRoot }) {
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [result, setResult] = useState(null);
   const [scanId, setScanId] = useState(null);
+  const notify = useNotify();
+  const activeRef = useRef(active);
+
+  useEffect(() => {
+    activeRef.current = active;
+  }, [active]);
 
   async function chooseFolder() {
     const picked = await window.api.dialog.chooseFolder(root);
@@ -35,6 +42,7 @@ export default function LargeFiles({ drives, defaultRoot }) {
       const results = await window.api.largeFiles.scan(id, root, minSize);
       setFiles(results);
       setSelected(new Set());
+      if (!activeRef.current) notify(`Large Files scan finished — ${results.length} file(s) found.`);
     } finally {
       unsub();
       setScanning(false);
@@ -64,6 +72,7 @@ export default function LargeFiles({ drives, defaultRoot }) {
     setResult(r);
     setFiles((prev) => prev.filter((f) => !selected.has(f.path)));
     setSelected(new Set());
+    if (!activeRef.current) notify(`Large Files: sent ${formatBytes(r.freed)} to the Recycle Bin.`);
   }
 
   return (

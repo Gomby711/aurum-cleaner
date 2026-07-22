@@ -1,12 +1,13 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Search, Trash2, Copy, CheckCircle2, ChevronDown } from 'lucide-react';
 import PageShell from '../components/PageShell';
 import ConfirmModal from '../components/ConfirmModal';
 import LocationBar from '../components/LocationBar';
 import { formatBytes } from '../lib/format';
+import { useNotify } from '../lib/notifications';
 
-export default function Duplicates({ drives, defaultRoot }) {
+export default function Duplicates({ drives, defaultRoot, active }) {
   const [root, setRoot] = useState(defaultRoot);
   const [groups, setGroups] = useState([]);
   const [selected, setSelected] = useState(new Set());
@@ -16,6 +17,12 @@ export default function Duplicates({ drives, defaultRoot }) {
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [result, setResult] = useState(null);
   const [scanId, setScanId] = useState(null);
+  const notify = useNotify();
+  const activeRef = useRef(active);
+
+  useEffect(() => {
+    activeRef.current = active;
+  }, [active]);
 
   async function chooseFolder() {
     const picked = await window.api.dialog.chooseFolder(root);
@@ -39,6 +46,7 @@ export default function Duplicates({ drives, defaultRoot }) {
       results.forEach((g) => g.files.slice(1).forEach((f) => auto.add(f)));
       setSelected(auto);
       setExpanded(new Set(results.slice(0, 5).map((g) => g.hash)));
+      if (!activeRef.current) notify(`Duplicates scan finished — ${results.length} group(s) found.`);
     } finally {
       unsub();
       setScanning(false);
@@ -82,6 +90,7 @@ export default function Duplicates({ drives, defaultRoot }) {
         .filter((g) => g.files.length > 1)
     );
     setSelected(new Set());
+    if (!activeRef.current) notify(`Duplicates: sent ${formatBytes(r.freed)} to the Recycle Bin.`);
   }
 
   return (

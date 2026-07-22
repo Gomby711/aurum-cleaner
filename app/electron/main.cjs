@@ -124,6 +124,9 @@ ipcMain.handle('window:maximize', () => {
 });
 ipcMain.handle('window:close', () => mainWindow?.close());
 
+// --- app info ---
+ipcMain.handle('app:getVersion', () => app.getVersion());
+
 // --- drives ---
 ipcMain.handle('drives:list', async () => listDrives());
 

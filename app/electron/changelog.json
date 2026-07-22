@@ -1,5 +1,23 @@
 [
   {
+    "version": "1.0.0",
+    "date": "2026-07-21",
+    "changes": [
+      "Aurum Cleaner is now out of beta — first stable 1.0 release.",
+      "General polish and stability improvements across Quick Clean, Disk Analyzer, Large Files, Duplicates, and Claude Cleanup."
+    ]
+  },
+  {
+    "version": "0.2.2",
+    "date": "2026-07-21",
+    "changes": [
+      "Disk Analyzer now lets you select/deselect files before deleting, just like Large Files and Duplicates — nothing is removed without you picking it first.",
+      "New app icon and title bar mark.",
+      "Quick Clean, Claude Cleanup, Disk Analyzer, Large Files, and Duplicates now keep scanning or deleting in the background if you switch to another page, instead of stopping — a toast in the top-right lets you know when a job finishes while you're away.",
+      "The version number in Settings now always matches the running app version."
+    ]
+  },
+  {
     "version": "0.2.1",
     "date": "2026-07-21",
     "changes": [

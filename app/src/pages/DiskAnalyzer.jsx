@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Treemap, ResponsiveContainer } from 'recharts';
 import { Search, ChevronLeft, Trash2, CheckCircle2 } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
@@ -6,10 +6,11 @@ import PageShell from '../components/PageShell';
 import ConfirmModal from '../components/ConfirmModal';
 import LocationBar from '../components/LocationBar';
 import { formatBytes } from '../lib/format';
+import { useNotify } from '../lib/notifications';
 
 const PALETTE = ['#f4e2a6', '#e8c874', '#d4af37', '#c19a2e', '#a9821f', '#8a6a19'];
 
-export default function DiskAnalyzer({ drives, defaultRoot }) {
+export default function DiskAnalyzer({ drives, defaultRoot, active }) {
   const [root, setRoot] = useState(defaultRoot);
   const [history, setHistory] = useState([]);
   const [tree, setTree] = useState(null);
@@ -20,6 +21,12 @@ export default function DiskAnalyzer({ drives, defaultRoot }) {
   const [selected, setSelected] = useState(new Set());
   const [result, setResult] = useState(null);
   const [scanId, setScanId] = useState(null);
+  const notify = useNotify();
+  const activeRef = useRef(active);
+
+  useEffect(() => {
+    activeRef.current = active;
+  }, [active]);
 
   async function chooseFolder() {
     const picked = await window.api.dialog.chooseFolder(root);
@@ -37,7 +44,7 @@ export default function DiskAnalyzer({ drives, defaultRoot }) {
     setSelected(new Set());
   }
 
-  async function scan(path = root, pushHistory = true) {
+  async function scan(path = root, pushHistory = true, silent = false) {
     setScanning(true);
     setSelected(new Set());
     setResult(null);
@@ -53,6 +60,7 @@ export default function DiskAnalyzer({ drives, defaultRoot }) {
       }
       setTree(result);
       setRoot(path);
+      if (!silent && !activeRef.current) notify('Disk Analyzer scan finished.');
     } finally {
       unsub();
       setScanning(false);
@@ -95,7 +103,8 @@ export default function DiskAnalyzer({ drives, defaultRoot }) {
     const r = await window.api.files.trash(paths);
     setResult(r);
     setSelected(new Set());
-    scan(root, false);
+    if (!activeRef.current) notify(`Disk Analyzer: sent ${formatBytes(r.freed)} to the Recycle Bin.`);
+    scan(root, false, true);
   }
 
   return (
@@ -225,9 +234,10 @@ export default function DiskAnalyzer({ drives, defaultRoot }) {
         confirmLabel="Move to Recycle Bin"
         danger
         onConfirm={async () => {
-          await window.api.files.trash([confirmTarget.path]);
+          const r = await window.api.files.trash([confirmTarget.path]);
+          if (!activeRef.current) notify(`Disk Analyzer: sent ${formatBytes(r.freed)} to the Recycle Bin.`);
           setConfirmTarget(null);
-          scan(root, false);
+          scan(root, false, true);
         }}
         onCancel={() => setConfirmTarget(null)}
       />

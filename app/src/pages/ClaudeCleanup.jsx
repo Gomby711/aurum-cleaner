@@ -1,11 +1,12 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Bot, RefreshCw, CheckCircle2, Clock } from 'lucide-react';
 import PageShell from '../components/PageShell';
 import ConfirmModal from '../components/ConfirmModal';
 import { formatBytes, formatDate, daysAgo } from '../lib/format';
+import { useNotify } from '../lib/notifications';
 
-export default function ClaudeCleanup() {
+export default function ClaudeCleanup({ active }) {
   const [threshold, setThreshold] = useState(5);
   const [data, setData] = useState({ projects: [], orphanJobs: [], orphanHistory: [] });
   const [selected, setSelected] = useState(new Set());
@@ -13,9 +14,24 @@ export default function ClaudeCleanup() {
   const [cleaning, setCleaning] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [result, setResult] = useState(null);
+  const notify = useNotify();
+  const activeRef = useRef(active);
+  const hasLoadedRef = useRef(false);
 
   useEffect(() => {
-    scan();
+    activeRef.current = active;
+  }, [active]);
+
+  useEffect(() => {
+    if (active && !hasLoadedRef.current) {
+      hasLoadedRef.current = true;
+      scan();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [active]);
+
+  useEffect(() => {
+    if (hasLoadedRef.current) scan();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [threshold]);
 
@@ -37,6 +53,7 @@ export default function ClaudeCleanup() {
         ...d.orphanHistory.map((p) => `orphan-history:${p.path}`),
       ];
       setSelected(new Set(keys));
+      if (!activeRef.current) notify('Claude Cleanup scan finished.');
     } finally {
       setScanning(false);
     }
@@ -60,6 +77,7 @@ export default function ClaudeCleanup() {
     const r = await window.api.claudeCleanup.clean(chosen);
     setResult(r);
     setCleaning(false);
+    if (!activeRef.current) notify(`Claude Cleanup freed ${formatBytes(r.freed)}.`);
     scan();
   }
 
