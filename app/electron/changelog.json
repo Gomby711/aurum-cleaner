@@ -1,5 +1,13 @@
 [
   {
+    "version": "0.2.1",
+    "date": "2026-07-21",
+    "changes": [
+      "Fixed dropdown menus (like the drive picker) rendering unreadable white-on-white text.",
+      "Added a drive picker to Disk Analyzer, Large Files, and Duplicates so you can jump straight to any drive, not just C:\\Users."
+    ]
+  },
+  {
     "version": "0.2.0",
     "date": "2026-07-21",
     "changes": [
