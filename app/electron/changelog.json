@@ -1,5 +1,13 @@
 [
   {
+    "version": "1.0.0",
+    "date": "2026-07-21",
+    "changes": [
+      "Aurum Cleaner is now out of beta — first stable 1.0 release.",
+      "General polish and stability improvements across Quick Clean, Disk Analyzer, Large Files, Duplicates, and Claude Cleanup."
+    ]
+  },
+  {
     "version": "0.2.2",
     "date": "2026-07-21",
     "changes": [
