@@ -1,13 +1,41 @@
 import { useEffect, useState } from 'react';
-import { Gem, ShieldCheck, Heart } from 'lucide-react';
+import { Gem, ShieldCheck, Heart, RefreshCw } from 'lucide-react';
 import PageShell from '../components/PageShell';
+
+const STATUS_LABEL = {
+  'up-to-date': "You're up to date.",
+  downloading: (s) => `Downloading update v${s.version}…`,
+  ready: (s) => `Update v${s.version} downloaded — restart to install.`,
+  error: (s) => s.message || 'Could not check for updates.',
+};
 
 export default function Settings() {
   const [version, setVersion] = useState(null);
+  const [checking, setChecking] = useState(false);
+  const [updateStatus, setUpdateStatus] = useState(null);
 
   useEffect(() => {
     window.api?.app.getVersion().then(setVersion);
   }, []);
+
+  useEffect(() => {
+    const unsub = window.api?.updates?.onStatus((s) => {
+      setUpdateStatus(s);
+      setChecking(false);
+    });
+    return unsub;
+  }, []);
+
+  const checkForUpdates = async () => {
+    setChecking(true);
+    setUpdateStatus(null);
+    const result = await window.api?.updates?.checkNow();
+    if (!result?.checking) {
+      // dev mode, or no update feed configured — no status event will follow
+      setChecking(false);
+      setUpdateStatus({ state: 'error', message: 'Updates are unavailable in this build.' });
+    }
+  };
 
   return (
     <PageShell title="Settings" subtitle="About Aurum Cleaner.">
@@ -23,6 +51,24 @@ export default function Settings() {
               a WinDirStat-style Disk Analyzer, large-file and duplicate finders, plus a dedicated
               Claude Code project cleaner.
             </p>
+            <div style={{ marginTop: 14, display: 'flex', alignItems: 'center', gap: 12 }}>
+              <button
+                className="btn"
+                style={{ padding: '6px 12px', fontSize: 12.5, display: 'flex', alignItems: 'center', gap: 6 }}
+                onClick={checkForUpdates}
+                disabled={checking}
+              >
+                <RefreshCw size={13} className={checking ? 'spin' : undefined} />
+                {checking ? 'Checking…' : 'Check for updates'}
+              </button>
+              {updateStatus && !checking && (
+                <span style={{ fontSize: 12.5, color: 'var(--text-2)' }}>
+                  {typeof STATUS_LABEL[updateStatus.state] === 'function'
+                    ? STATUS_LABEL[updateStatus.state](updateStatus)
+                    : STATUS_LABEL[updateStatus.state] || null}
+                </span>
+              )}
+            </div>
           </div>
         </div>
 
