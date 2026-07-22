@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Treemap, ResponsiveContainer } from 'recharts';
-import { Search, ChevronLeft, Trash2 } from 'lucide-react';
+import { Search, ChevronLeft, Trash2, CheckCircle2 } from 'lucide-react';
+import { AnimatePresence, motion } from 'framer-motion';
 import PageShell from '../components/PageShell';
 import ConfirmModal from '../components/ConfirmModal';
 import LocationBar from '../components/LocationBar';
@@ -15,6 +16,9 @@ export default function DiskAnalyzer({ drives, defaultRoot }) {
   const [scanning, setScanning] = useState(false);
   const [progress, setProgress] = useState(null);
   const [confirmTarget, setConfirmTarget] = useState(null);
+  const [bulkConfirmOpen, setBulkConfirmOpen] = useState(false);
+  const [selected, setSelected] = useState(new Set());
+  const [result, setResult] = useState(null);
   const [scanId, setScanId] = useState(null);
 
   async function chooseFolder() {
@@ -22,6 +26,7 @@ export default function DiskAnalyzer({ drives, defaultRoot }) {
     if (picked) {
       setRoot(picked);
       setHistory([]);
+      setSelected(new Set());
     }
   }
 
@@ -29,10 +34,13 @@ export default function DiskAnalyzer({ drives, defaultRoot }) {
     setRoot(`${letter}\\`);
     setHistory([]);
     setTree(null);
+    setSelected(new Set());
   }
 
   async function scan(path = root, pushHistory = true) {
     setScanning(true);
+    setSelected(new Set());
+    setResult(null);
     const id = `treemap-${Date.now()}`;
     setScanId(id);
     const unsub = window.api.diskAnalyzer.onProgress((p) => {
@@ -68,7 +76,27 @@ export default function DiskAnalyzer({ drives, defaultRoot }) {
     scan(node.path);
   }
 
+  function toggleFile(path) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(path)) next.delete(path);
+      else next.add(path);
+      return next;
+    });
+  }
+
   const data = tree?.children?.filter((c) => c.size > 0) || [];
+  const selectedItems = data.filter((c) => c.type === 'file' && selected.has(c.path));
+  const selectedTotal = selectedItems.reduce((sum, c) => sum + c.size, 0);
+
+  async function deleteSelected() {
+    setBulkConfirmOpen(false);
+    const paths = selectedItems.map((c) => c.path);
+    const r = await window.api.files.trash(paths);
+    setResult(r);
+    setSelected(new Set());
+    scan(root, false);
+  }
 
   return (
     <PageShell title="Disk Analyzer" subtitle="A WinDirStat-style map of exactly what's taking up your space.">
@@ -96,6 +124,35 @@ export default function DiskAnalyzer({ drives, defaultRoot }) {
           </div>
         )}
 
+        {!scanning && selectedItems.length > 0 && (
+          <div className="glass-panel" style={{ padding: '12px 18px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <span style={{ fontSize: 13 }}>
+              {selectedItems.length} selected — {formatBytes(selectedTotal)}
+            </span>
+            <button className="btn btn-danger" onClick={() => setBulkConfirmOpen(true)}>
+              <Trash2 size={14} /> Move to Recycle Bin
+            </button>
+          </div>
+        )}
+
+        <AnimatePresence>
+          {result && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              exit={{ opacity: 0, height: 0 }}
+              className="glass-panel"
+              style={{ padding: '14px 20px', display: 'flex', alignItems: 'center', gap: 10, overflow: 'hidden' }}
+            >
+              <CheckCircle2 size={17} color="var(--success)" />
+              <span style={{ fontSize: 13 }}>
+                Sent <b>{formatBytes(result.freed)}</b> to the Recycle Bin
+                {result.errors > 0 ? ` — ${result.errors} file(s) skipped.` : '.'}
+              </span>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
         {!scanning && tree && (
           <div style={{ flex: 1, minHeight: 0, display: 'flex', gap: 16 }}>
             <div className="glass-panel" style={{ flex: 2, padding: 14, minWidth: 0 }}>
@@ -121,7 +178,18 @@ export default function DiskAnalyzer({ drives, defaultRoot }) {
                     style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, cursor: c.type === 'folder' ? 'pointer' : 'default' }}
                     onClick={() => drillInto(c)}
                   >
-                    <span style={{ width: 8, height: 8, borderRadius: 2, background: PALETTE[i % PALETTE.length], flexShrink: 0 }} />
+                    {c.type === 'file' ? (
+                      <input
+                        type="checkbox"
+                        className="checkbox"
+                        checked={selected.has(c.path)}
+                        onClick={(e) => e.stopPropagation()}
+                        onChange={() => toggleFile(c.path)}
+                        style={{ flexShrink: 0 }}
+                      />
+                    ) : (
+                      <span style={{ width: 8, height: 8, borderRadius: 2, background: PALETTE[i % PALETTE.length], flexShrink: 0 }} />
+                    )}
                     <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--text-1)' }}>{c.name}</span>
                     <span style={{ color: 'var(--text-2)', flexShrink: 0 }}>{formatBytes(c.size)}</span>
                     {c.type === 'file' && (
@@ -131,6 +199,7 @@ export default function DiskAnalyzer({ drives, defaultRoot }) {
                           setConfirmTarget(c);
                         }}
                         style={{ background: 'none', border: 'none', color: 'var(--danger)', display: 'flex', flexShrink: 0 }}
+                        title="Delete just this file"
                       >
                         <Trash2 size={13} />
                       </button>
@@ -161,6 +230,16 @@ export default function DiskAnalyzer({ drives, defaultRoot }) {
           scan(root, false);
         }}
         onCancel={() => setConfirmTarget(null)}
+      />
+
+      <ConfirmModal
+        open={bulkConfirmOpen}
+        title="Move selected files to Recycle Bin?"
+        description={`${selectedItems.length} file(s) totaling ${formatBytes(selectedTotal)} will be moved to the Recycle Bin. You can restore them from there if needed.`}
+        confirmLabel="Move to Recycle Bin"
+        danger
+        onConfirm={deleteSelected}
+        onCancel={() => setBulkConfirmOpen(false)}
       />
     </PageShell>
   );
