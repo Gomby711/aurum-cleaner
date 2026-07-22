@@ -46,4 +46,10 @@ contextBridge.exposeInMainWorld('api', {
   dialog: {
     chooseFolder: (defaultPath) => ipcRenderer.invoke('dialog:chooseFolder', defaultPath),
   },
+  updates: {
+    getWhatsNew: () => ipcRenderer.invoke('updates:getWhatsNew'),
+    installNow: () => ipcRenderer.invoke('updates:installNow'),
+    checkNow: () => ipcRenderer.invoke('updates:checkNow'),
+    onStatus: (cb) => on('updates:status', cb),
+  },
 });

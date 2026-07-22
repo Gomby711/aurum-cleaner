@@ -1,0 +1,17 @@
+[
+  {
+    "version": "0.2.0",
+    "date": "2026-07-21",
+    "changes": [
+      "Added automatic updates — Aurum Cleaner now checks for new versions on launch, downloads them in the background, and installs on restart.",
+      "Added this What's New screen, shown once after every update."
+    ]
+  },
+  {
+    "version": "0.1.0",
+    "date": "2026-07-21",
+    "changes": [
+      "Initial release: Dashboard, Quick Clean, Disk Analyzer, Large Files, Duplicates, and Claude Cleanup."
+    ]
+  }
+]

@@ -1,11 +1,12 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { FolderOpen, Search, Trash2, FileWarning, CheckCircle2 } from 'lucide-react';
+import { Search, Trash2, FileWarning, CheckCircle2 } from 'lucide-react';
 import PageShell from '../components/PageShell';
 import ConfirmModal from '../components/ConfirmModal';
+import LocationBar from '../components/LocationBar';
 import { formatBytes, formatDate } from '../lib/format';
 
-export default function LargeFiles({ defaultRoot }) {
+export default function LargeFiles({ drives, defaultRoot }) {
   const [root, setRoot] = useState(defaultRoot);
   const [minSize, setMinSize] = useState(200);
   const [files, setFiles] = useState([]);
@@ -69,9 +70,7 @@ export default function LargeFiles({ defaultRoot }) {
     <PageShell title="Large Files" subtitle="Find the biggest space hogs on your drive and send them to the Recycle Bin.">
       <div style={{ display: 'flex', flexDirection: 'column', height: '100%', gap: 16 }}>
         <div className="glass-panel" style={{ padding: '14px 18px', display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-          <button className="btn" onClick={chooseFolder}>
-            <FolderOpen size={14} /> {root}
-          </button>
+          <LocationBar drives={drives} root={root} onSelectDrive={(letter) => setRoot(`${letter}\\`)} onChooseFolder={chooseFolder} disabled={scanning} />
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <span style={{ fontSize: 12, color: 'var(--text-2)' }}>Min size (MB)</span>
             <input

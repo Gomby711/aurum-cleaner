@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import TitleBar from './components/TitleBar';
 import Sidebar from './components/Sidebar';
+import WhatsNewModal from './components/WhatsNewModal';
+import UpdateBanner from './components/UpdateBanner';
 import Dashboard from './pages/Dashboard';
 import QuickClean from './pages/QuickClean';
 import DiskAnalyzer from './pages/DiskAnalyzer';
@@ -29,6 +31,8 @@ export default function App() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh' }}>
       <TitleBar />
+      <WhatsNewModal />
+      <UpdateBanner />
       <div style={{ display: 'flex', flex: 1, minHeight: 0 }}>
         <Sidebar active={page} onChange={setPage} />
         <div style={{ flex: 1, minWidth: 0, padding: '24px 28px', overflow: 'hidden' }}>
@@ -36,9 +40,9 @@ export default function App() {
             <Dashboard drives={drives} activeDrive={activeDrive} onSelectDrive={setActiveDrive} onNavigate={setPage} />
           )}
           {page === 'quick-clean' && <QuickClean />}
-          {page === 'disk-analyzer' && <DiskAnalyzer defaultRoot={`${activeDrive}\\`} />}
-          {page === 'large-files' && <LargeFiles defaultRoot={defaultRoot} />}
-          {page === 'duplicates' && <Duplicates defaultRoot={defaultRoot} />}
+          {page === 'disk-analyzer' && <DiskAnalyzer drives={drives} defaultRoot={`${activeDrive}\\`} />}
+          {page === 'large-files' && <LargeFiles drives={drives} defaultRoot={defaultRoot} />}
+          {page === 'duplicates' && <Duplicates drives={drives} defaultRoot={defaultRoot} />}
           {page === 'claude-cleanup' && <ClaudeCleanup />}
           {page === 'settings' && <Settings />}
         </div>

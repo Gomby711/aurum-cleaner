@@ -2,7 +2,7 @@
   "name": "aurum-cleaner",
   "productName": "Aurum Cleaner",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "A premium, free storage-cleaning desktop app for Windows.",
   "author": "Aurum Cleaner",
   "main": "electron/main.cjs",
@@ -13,10 +13,12 @@
     "dev:all": "concurrently -k -n VITE,ELECTRON -c blue,yellow \"npm:dev\" \"wait-on tcp:5173 && npm:dev:electron\"",
     "build": "vite build",
     "build:electron": "npm run build && electron-builder",
+    "release": "npm run build && electron-builder --publish always",
     "lint": "oxlint",
     "preview": "vite preview"
   },
   "dependencies": {
+    "electron-updater": "^6.8.9",
     "framer-motion": "^12.42.2",
     "lucide-react": "^1.25.0",
     "react": "^19.2.7",
@@ -43,6 +45,11 @@
       "dist/**/*",
       "electron/**/*"
     ],
+    "publish": {
+      "provider": "github",
+      "owner": "Gomby711",
+      "repo": "aurum-cleaner"
+    },
     "win": {
       "target": "nsis",
       "icon": "build/icon.ico"

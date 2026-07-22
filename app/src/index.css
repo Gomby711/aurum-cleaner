@@ -73,6 +73,23 @@ button {
   cursor: pointer;
 }
 
+/* Native <select> popups render using the OS theme, which follows the
+   root's dark color-scheme and leaves option text unreadable (white-on-white
+   or light-gray-on-white on hover). Forcing light color-scheme just on the
+   control keeps the popup list legible while our own CSS still styles the
+   closed box. */
+select {
+  color-scheme: light;
+  color: var(--text-0);
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+}
+select option {
+  color: #16130a;
+  background: #f5f2e9;
+}
+
 .gold-text {
   background: var(--gold-gradient);
   -webkit-background-clip: text;

@@ -1,4 +1,5 @@
 const { app, BrowserWindow, ipcMain, dialog, shell } = require('electron');
+const { autoUpdater } = require('electron-updater');
 const path = require('path');
 const fs = require('fs');
 
@@ -17,6 +18,8 @@ const { scanStaleProjects, cleanStaleItems } = require('./ipc/claudeCleanup.cjs'
 const { findLargeFiles } = require('./ipc/largeFiles.cjs');
 const { findDuplicates } = require('./ipc/duplicates.cjs');
 const { buildTree, dirSize } = require('./lib/fsWalk.cjs');
+const { getLastSeenVersion, setLastSeenVersion } = require('./lib/updateState.cjs');
+const { entriesSince } = require('./lib/changelog.cjs');
 
 const isDev = !app.isPackaged;
 let mainWindow;
@@ -50,7 +53,10 @@ function createWindow() {
   }
 }
 
-app.whenReady().then(createWindow);
+app.whenReady().then(() => {
+  createWindow();
+  setupAutoUpdates();
+});
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit();
@@ -58,6 +64,55 @@ app.on('window-all-closed', () => {
 
 app.on('activate', () => {
   if (BrowserWindow.getAllWindows().length === 0) createWindow();
+});
+
+// --- auto-update + "what's new" ---
+function setupAutoUpdates() {
+  if (isDev) return; // no update feed in development
+
+  autoUpdater.autoDownload = true;
+  autoUpdater.autoInstallOnAppQuit = false;
+
+  autoUpdater.on('update-available', (info) => {
+    mainWindow?.webContents.send('updates:status', { state: 'downloading', version: info.version });
+  });
+  autoUpdater.on('update-not-available', () => {
+    mainWindow?.webContents.send('updates:status', { state: 'up-to-date' });
+  });
+  autoUpdater.on('update-downloaded', (info) => {
+    mainWindow?.webContents.send('updates:status', {
+      state: 'ready',
+      version: info.version,
+      releaseNotes: typeof info.releaseNotes === 'string' ? info.releaseNotes : null,
+    });
+  });
+  autoUpdater.on('error', (err) => {
+    mainWindow?.webContents.send('updates:status', { state: 'error', message: err?.message });
+  });
+
+  autoUpdater.checkForUpdates().catch(() => {
+    // offline or no releases yet — non-fatal
+  });
+}
+
+ipcMain.handle('updates:installNow', () => {
+  autoUpdater.quitAndInstall();
+});
+
+ipcMain.handle('updates:checkNow', () => {
+  if (isDev) return { checking: false };
+  autoUpdater.checkForUpdates().catch(() => {});
+  return { checking: true };
+});
+
+// Returns changelog entries newer than the last version this user has seen,
+// then marks the current version as seen.
+ipcMain.handle('updates:getWhatsNew', () => {
+  const currentVersion = app.getVersion();
+  const lastSeen = getLastSeenVersion();
+  const entries = entriesSince(lastSeen, currentVersion);
+  setLastSeenVersion(currentVersion);
+  return { entries, currentVersion };
 });
 
 // --- window chrome controls (custom frameless title bar) ---

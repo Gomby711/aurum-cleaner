@@ -1,11 +1,12 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { FolderOpen, Search, Trash2, Copy, CheckCircle2, ChevronDown } from 'lucide-react';
+import { Search, Trash2, Copy, CheckCircle2, ChevronDown } from 'lucide-react';
 import PageShell from '../components/PageShell';
 import ConfirmModal from '../components/ConfirmModal';
+import LocationBar from '../components/LocationBar';
 import { formatBytes } from '../lib/format';
 
-export default function Duplicates({ defaultRoot }) {
+export default function Duplicates({ drives, defaultRoot }) {
   const [root, setRoot] = useState(defaultRoot);
   const [groups, setGroups] = useState([]);
   const [selected, setSelected] = useState(new Set());
@@ -87,9 +88,7 @@ export default function Duplicates({ defaultRoot }) {
     <PageShell title="Duplicate Files" subtitle="Find identical files wasting space and keep just one copy of each.">
       <div style={{ display: 'flex', flexDirection: 'column', height: '100%', gap: 16 }}>
         <div className="glass-panel" style={{ padding: '14px 18px', display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-          <button className="btn" onClick={chooseFolder}>
-            <FolderOpen size={14} /> {root}
-          </button>
+          <LocationBar drives={drives} root={root} onSelectDrive={(letter) => setRoot(`${letter}\\`)} onChooseFolder={chooseFolder} disabled={scanning} />
           <div style={{ flex: 1 }} />
           {scanning ? (
             <button className="btn" onClick={cancelScan}>Cancel</button>

@@ -1,13 +1,14 @@
 import { useState } from 'react';
 import { Treemap, ResponsiveContainer } from 'recharts';
-import { FolderOpen, Search, ChevronLeft, Trash2 } from 'lucide-react';
+import { Search, ChevronLeft, Trash2 } from 'lucide-react';
 import PageShell from '../components/PageShell';
 import ConfirmModal from '../components/ConfirmModal';
+import LocationBar from '../components/LocationBar';
 import { formatBytes } from '../lib/format';
 
 const PALETTE = ['#f4e2a6', '#e8c874', '#d4af37', '#c19a2e', '#a9821f', '#8a6a19'];
 
-export default function DiskAnalyzer({ defaultRoot }) {
+export default function DiskAnalyzer({ drives, defaultRoot }) {
   const [root, setRoot] = useState(defaultRoot);
   const [history, setHistory] = useState([]);
   const [tree, setTree] = useState(null);
@@ -22,6 +23,12 @@ export default function DiskAnalyzer({ defaultRoot }) {
       setRoot(picked);
       setHistory([]);
     }
+  }
+
+  function selectDrive(letter) {
+    setRoot(`${letter}\\`);
+    setHistory([]);
+    setTree(null);
   }
 
   async function scan(path = root, pushHistory = true) {
@@ -72,9 +79,7 @@ export default function DiskAnalyzer({ defaultRoot }) {
               <ChevronLeft size={14} />
             </button>
           )}
-          <button className="btn" onClick={chooseFolder} disabled={scanning}>
-            <FolderOpen size={14} /> {root}
-          </button>
+          <LocationBar drives={drives} root={root} onSelectDrive={selectDrive} onChooseFolder={chooseFolder} disabled={scanning} />
           <div style={{ flex: 1 }} />
           {scanning ? (
             <button className="btn" onClick={cancelScan}>Cancel</button>
