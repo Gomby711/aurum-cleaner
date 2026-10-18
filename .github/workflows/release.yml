@@ -71,6 +71,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Publish the release
+        working-directory: ${{ github.workspace }}
         run: |
           VERSION=$(node -p "require('./app/package.json').version")
           gh release edit "v${VERSION}" --draft=false --latest --repo "${{ github.repository }}"
+          # Remove any leftover draft from an earlier failed or raced run.
+          for id in $(gh api "repos/${{ github.repository }}/releases" --jq '.[] | select(.draft) | .id'); do
+            gh api -X DELETE "repos/${{ github.repository }}/releases/$id"
+          done
