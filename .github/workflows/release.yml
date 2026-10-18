@@ -1,7 +1,10 @@
 name: Release
 
-# Builds the Windows installer and the macOS DMG/ZIP and attaches both to one GitHub
-# release. Run it from the Actions tab, or push a tag like v1.1.0.
+# Builds the Windows installer and the macOS DMG/ZIP, then creates ONE GitHub release
+# with every file attached. Run it from the Actions tab, or push a tag like v1.2.0.
+#
+# The builds deliberately don't publish themselves: electron-builder uploads files in
+# parallel and ends up creating several half-empty draft releases.
 on:
   push:
     tags: ['v*']
@@ -10,16 +13,12 @@ on:
 permissions:
   contents: write
 
-defaults:
-  run:
-    working-directory: app
-
-env:
-  GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
 jobs:
   windows:
     runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: app
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -29,13 +28,21 @@ jobs:
           cache-dependency-path: app/package-lock.json
       - run: npm ci
       - run: npm run build
-      - run: npx electron-builder --win --publish always
+      - run: npx electron-builder --win --publish never
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows
+          path: |
+            app/release/*.exe
+            app/release/*.exe.blockmap
+            app/release/latest.yml
+          if-no-files-found: error
 
-  # Runs after Windows so both builds upload to the same release instead of racing
-  # to create two.
   macos:
-    needs: windows
     runs-on: macos-latest
+    defaults:
+      run:
+        working-directory: app
     env:
       # True only when a Developer ID certificate secret exists (see README → Releasing).
       HAS_APPLE_CERT: ${{ secrets.MAC_CERT_P12_BASE64 != '' }}
@@ -50,9 +57,9 @@ jobs:
       - run: npm test
       - run: npm run build
 
-      - name: Build and publish (signed + notarized)
+      - name: Build (signed + notarized)
         if: env.HAS_APPLE_CERT == 'true'
-        run: npx electron-builder --mac --publish always -c.mac.notarize=true
+        run: npx electron-builder --mac --publish never -c.mac.notarize=true
         # Only set here: an empty CSC_LINK makes electron-builder fail instead of skipping signing.
         env:
           CSC_LINK: ${{ secrets.MAC_CERT_P12_BASE64 }}
@@ -61,21 +68,49 @@ jobs:
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
 
-      - name: Build and publish (ad-hoc signed)
+      - name: Build (ad-hoc signed)
         if: env.HAS_APPLE_CERT != 'true'
-        run: npx electron-builder --mac --publish always
+        run: npx electron-builder --mac --publish never
 
-  publish:
-    needs: macos
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macos
+          path: |
+            app/release/*.dmg
+            app/release/*.dmg.blockmap
+            app/release/*.zip
+            app/release/*.zip.blockmap
+            app/release/latest-mac.yml
+          if-no-files-found: error
+
+  release:
+    needs: [windows, macos]
     runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
       - uses: actions/checkout@v4
-      - name: Publish the release
-        working-directory: ${{ github.workspace }}
+      - uses: actions/download-artifact@v4
+        with:
+          path: files
+          merge-multiple: true
+      - name: Create the release
         run: |
           VERSION=$(node -p "require('./app/package.json').version")
-          gh release edit "v${VERSION}" --draft=false --latest --repo "${{ github.repository }}"
-          # Remove any leftover draft from an earlier failed or raced run.
-          for id in $(gh api "repos/${{ github.repository }}/releases" --jq '.[] | select(.draft) | .id'); do
-            gh api -X DELETE "repos/${{ github.repository }}/releases/$id"
+          TAG="v${VERSION}"
+          REPO="${{ github.repository }}"
+          ls -la files
+
+          # Remove leftover drafts from earlier runs.
+          for id in $(gh api --paginate "repos/${REPO}/releases" --jq '.[] | select(.draft) | .id'); do
+            gh api -X DELETE "repos/${REPO}/releases/${id}"
           done
+
+          if gh release view "$TAG" --repo "$REPO" >/dev/null 2>&1; then
+            gh release upload "$TAG" files/* --clobber --repo "$REPO"
+            gh release edit "$TAG" --latest --repo "$REPO"
+          else
+            gh release create "$TAG" files/* --repo "$REPO" --target "${{ github.sha }}" \
+              --title "$VERSION" --latest \
+              --notes "Aurum Cleaner ${VERSION} for Windows and macOS. Mac: download the .dmg, open it, and drag Aurum Cleaner to Applications (see INSTALL-MAC.md in the repo if macOS shows a one-time prompt)."
+          fi

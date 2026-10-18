@@ -90,7 +90,8 @@
         "NSDownloadsFolderUsageDescription": "Aurum Cleaner looks in your Downloads folder for large and duplicate files you may want to remove.",
         "NSRemovableVolumesUsageDescription": "Aurum Cleaner can analyze external drives you choose to scan.",
         "NSAppleEventsUsageDescription": "Aurum Cleaner asks Finder to move leftover macOS installers to the Trash."
-      }
+      },
+      "artifactName": "Aurum-Cleaner-${version}-${arch}.${ext}"
     },
     "dmg": {
       "title": "Aurum Cleaner ${version}",
