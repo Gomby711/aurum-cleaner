@@ -22,13 +22,7 @@ jobs:
         working-directory: app
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      # macOS signing + notarization. Optional: when these secrets are missing the app is
-      # ad-hoc signed instead (users clear a one-time prompt in System Settings).
-      CSC_LINK: ${{ secrets.MAC_CERT_P12_BASE64 }}
-      CSC_KEY_PASSWORD: ${{ secrets.MAC_CERT_PASSWORD }}
-      APPLE_ID: ${{ secrets.APPLE_ID }}
-      APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
-      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+      # True only when a Developer ID certificate secret exists (see README → Releasing).
       HAS_APPLE_CERT: ${{ secrets.MAC_CERT_P12_BASE64 != '' }}
     steps:
       - uses: actions/checkout@v4
@@ -51,6 +45,13 @@ jobs:
       - name: Build and publish (macOS, signed + notarized)
         if: runner.os == 'macOS' && env.HAS_APPLE_CERT == 'true'
         run: npx electron-builder --mac --publish always -c.mac.notarize=true
+        # Only set here: an empty CSC_LINK makes electron-builder fail instead of skipping signing.
+        env:
+          CSC_LINK: ${{ secrets.MAC_CERT_P12_BASE64 }}
+          CSC_KEY_PASSWORD: ${{ secrets.MAC_CERT_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
 
       - name: Build and publish (macOS, ad-hoc signed)
         if: runner.os == 'macOS' && env.HAS_APPLE_CERT != 'true'
