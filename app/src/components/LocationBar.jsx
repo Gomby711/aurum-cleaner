@@ -1,5 +1,5 @@
-import { FolderOpen, HardDrive, Cloud } from 'lucide-react';
-import { isMac } from '../lib/platform';
+import { FolderOpen, HardDrive } from 'lucide-react';
+import ICloudToggle from './ICloudToggle';
 
 // Finds the drive a path lives on (longest matching drive id wins, so a path under
 // /Volumes/Backup is matched to "Backup", not the startup disk "/").
@@ -11,8 +11,8 @@ function driveFor(drives, root) {
 }
 
 // Lets the user jump straight to any drive, or browse to any folder via the native
-// OS picker. On macOS it also carries the explicit opt-in for scanning iCloud Drive.
-export default function LocationBar({ drives, root, onSelectDrive, onChooseFolder, disabled, includeICloud, onToggleICloud }) {
+// OS picker. On macOS it also carries the explicit opt-in for scanning iCloud.
+export default function LocationBar({ drives, root, onSelectDrive, onChooseFolder, disabled }) {
   const current = driveFor(drives, root);
 
   return (
@@ -41,15 +41,7 @@ export default function LocationBar({ drives, root, onSelectDrive, onChooseFolde
       <button className="btn" onClick={onChooseFolder} disabled={disabled}>
         <FolderOpen size={14} /> {root}
       </button>
-      {isMac && onToggleICloud && (
-        <label
-          style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 12.5, color: 'var(--text-1)', cursor: 'pointer' }}
-          title="iCloud Drive is skipped by default. Turn this on to include it — you'll be asked before anything in iCloud is deleted."
-        >
-          <input type="checkbox" className="checkbox" checked={!!includeICloud} onChange={(e) => onToggleICloud(e.target.checked)} disabled={disabled} />
-          <Cloud size={13} color="var(--text-2)" /> Include iCloud Drive
-        </label>
-      )}
+      <ICloudToggle disabled={disabled} />
     </div>
   );
 }

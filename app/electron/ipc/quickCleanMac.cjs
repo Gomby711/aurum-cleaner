@@ -9,6 +9,7 @@ const path = require('path');
 const { dirSize } = require('../lib/fsWalk.cjs');
 
 const DAY = 24 * 60 * 60 * 1000;
+const ICLOUD_DOWNLOADS_ID = 'icloud-downloads';
 
 // Browser caches live inside ~/Library/Caches, so the general "App Caches" category
 // leaves them out to avoid counting them twice.
@@ -177,7 +178,7 @@ async function sizeEntries(entries) {
   return { size, fileCount };
 }
 
-async function scanMac({ home, tmpdir, classify, onProgress }) {
+async function scanMac({ home, tmpdir, classify, onProgress, evictable }) {
   const results = [];
   for (const cat of buildMacCategories(home, tmpdir)) {
     const { entries, blockedByPermissions, exists } = await listEntries(cat, classify);
@@ -195,12 +196,30 @@ async function scanMac({ home, tmpdir, classify, onProgress }) {
     });
     if (onProgress) onProgress({ id: cat.id, done: true });
   }
+
+  if (evictable) {
+    const items = await evictable();
+    results.push({
+      id: ICLOUD_DOWNLOADS_ID,
+      label: "iCloud downloads you haven't opened in a year",
+      description:
+        'Frees space on this Mac only. The files stay safely in iCloud and download again when you open them — nothing is deleted from iCloud.',
+      risk: 'safe',
+      size: items.reduce((sum, i) => sum + i.size, 0),
+      fileCount: items.length,
+      exists: items.length > 0,
+      needsFullDiskAccess: false,
+      permanent: false,
+      icloud: true,
+    });
+    if (onProgress) onProgress({ id: ICLOUD_DOWNLOADS_ID, done: true });
+  }
   return results;
 }
 
 // Cleans the given categories in one go. `vault` stages removable items for undo;
 // `systemTrash(path)` is used for installers; permanent categories (Trash) are deleted outright.
-async function cleanMac(categoryIds, { home, tmpdir, classify, vault, systemTrash, retentionDays }) {
+async function cleanMac(categoryIds, { home, tmpdir, classify, vault, systemTrash, retentionDays, evict, evictable }) {
   const toStage = [];
   const toSystemTrash = [];
   const toDelete = [];
@@ -243,6 +262,17 @@ async function cleanMac(categoryIds, { home, tmpdir, classify, vault, systemTras
       freed += size;
     } catch {
       errors += 1;
+    }
+  }
+
+  if (categoryIds.includes(ICLOUD_DOWNLOADS_ID) && evict && evictable) {
+    for (const item of await evictable()) {
+      try {
+        await evict(item.path);
+        freed += item.size;
+      } catch {
+        errors += 1;
+      }
     }
   }
 

@@ -5,6 +5,7 @@ import ConfirmModal from '../components/ConfirmModal';
 import LocationBar from '../components/LocationBar';
 import { formatBytes } from '../lib/format';
 import { useNotify } from '../lib/notifications';
+import { useICloud } from '../lib/icloud';
 import RemovedBanner from '../components/RemovedBanner';
 import { isMac, removedMessage } from '../lib/platform';
 
@@ -18,7 +19,7 @@ export default function Duplicates({ drives, defaultRoot, active }) {
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [result, setResult] = useState(null);
   const [scanId, setScanId] = useState(null);
-  const [includeICloud, setIncludeICloud] = useState(false);
+  const { opts: icloud, anyOn: icloudOn } = useICloud();
   const [icloudPaths, setIcloudPaths] = useState(new Set());
   const notify = useNotify();
   const activeRef = useRef(active);
@@ -42,7 +43,7 @@ export default function Duplicates({ drives, defaultRoot, active }) {
       if (p.scanId === id) setProgress(p);
     });
     try {
-      const results = await window.api.duplicates.scan(id, root, 1, { includeICloud });
+      const results = await window.api.duplicates.scan(id, root, 1, { icloud });
       setGroups(results);
       // auto-select all but the first (oldest kept) file in each group
       const auto = new Set();
@@ -107,7 +108,7 @@ export default function Duplicates({ drives, defaultRoot, active }) {
     <PageShell title="Duplicate Files" subtitle="Find identical files wasting space and keep just one copy of each.">
       <div style={{ display: 'flex', flexDirection: 'column', height: '100%', gap: 16 }}>
         <div className="glass-panel" style={{ padding: '14px 18px', display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-          <LocationBar drives={drives} root={root} onSelectDrive={(d) => setRoot(d.root)} onChooseFolder={chooseFolder} disabled={scanning} includeICloud={includeICloud} onToggleICloud={setIncludeICloud} />
+          <LocationBar drives={drives} root={root} onSelectDrive={(d) => setRoot(d.root)} onChooseFolder={chooseFolder} disabled={scanning} />
           <div style={{ flex: 1 }} />
           {scanning ? (
             <button className="btn" onClick={cancelScan}>Cancel</button>
@@ -164,7 +165,7 @@ export default function Duplicates({ drives, defaultRoot, active }) {
                       <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: idx === 0 ? 'var(--text-0)' : 'var(--text-1)' }}>
                         {f}
                       </span>
-                      {isMac && includeICloud && /Mobile Documents|CloudStorage/.test(f) && (
+                      {isMac && icloudOn && /Mobile Documents|CloudStorage/.test(f) && (
                         <span className="risk-pill risk-low" style={{ display: 'inline-flex', alignItems: 'center', gap: 4, flexShrink: 0 }}><Cloud size={10} /> iCloud</span>
                       )}
                       {idx === 0 && <span className="risk-pill risk-safe" style={{ flexShrink: 0 }}>keep suggested</span>}

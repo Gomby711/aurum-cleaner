@@ -107,7 +107,7 @@ export default function Settings() {
             <div style={{ fontSize: 14, fontWeight: 700 }}>Safety first</div>
             <p style={{ fontSize: 13, color: 'var(--text-1)', marginTop: 8, lineHeight: 1.6 }}>
               {isMac
-                ? "Nothing is deleted straight away: removed items wait in Undo History so you can restore them. Quick Clean only touches well-known cache, log and developer-leftover locations — never Messages, Mail, Calendar, Notes, Photos or Keychain. iCloud Drive is skipped unless you switch it on for a scan, and anything in iCloud needs an extra confirmation, because deleting it there removes it from all your devices."
+                ? "Nothing is deleted straight away: removed items wait in Undo History so you can restore them. Quick Clean only touches well-known cache, log and developer-leftover locations — never Messages, Mail, Calendar, Notes, Photos or Keychain. iCloud is skipped unless you tick it for a scan, and anything in iCloud needs an extra confirmation, because deleting it there removes it from all your devices."
                 : 'Large Files and Duplicates always move items to the Recycle Bin — never a permanent delete. Quick Clean only ever touches well-known temp/cache locations, and always asks for confirmation with an exact size preview before removing anything.'}
             </p>
           </div>

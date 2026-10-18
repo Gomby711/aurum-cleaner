@@ -44,6 +44,13 @@ right after a clean, or any time from the Undo History page. Disk space comes ba
 items are freed for good: automatically after your retention period (7 days by default,
 configurable in Settings) or when you press **Free space now**.
 
-iCloud files are only offered in Large Files, Duplicates and Disk Analyzer when you tick
-**Include iCloud Drive**, and deleting one requires an extra confirmation, because it
-also removes the file from iCloud.com and your other devices.
+iCloud is off in every tool until you tick **Include iCloud** (iCloud Drive, app data, and
+synced Desktop & Documents are separate boxes). The **iCloud Cleanup** page lists files that
+haven't been modified in 1–10 years (5 by default), biggest first, so you can choose what to
+delete. Deleting from iCloud always needs an extra confirmation, because it also removes the
+file from iCloud.com and your other devices. Files that are on your Mac can be undone; files
+that exist only in the cloud go to the Trash and stay in iCloud.com → Recently Deleted for
+30 days.
+
+iCloud Photos, device backups and iCloud Mail aren't files on your Mac, so no app can list
+them here; review those in System Settings → Apple Account → iCloud.

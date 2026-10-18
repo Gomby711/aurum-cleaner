@@ -24,8 +24,9 @@ const { getLastSeenVersion, setLastSeenVersion } = require('./lib/updateState.cj
 const { entriesSince } = require('./lib/changelog.cjs');
 const { getSettings, setSettings } = require('./lib/settings.cjs');
 const { createVault } = require('./lib/undoVault.cjs');
-const { createClassifier } = require('./lib/macPaths.cjs');
+const { createClassifier, kindsFromOptions } = require('./lib/macPaths.cjs');
 const { scanMac, cleanMac } = require('./ipc/quickCleanMac.cjs');
+const { scanICloud, findEvictable, containsCloudOnly } = require('./ipc/icloudCleanup.cjs');
 
 const isDev = !app.isPackaged;
 const isMac = process.platform === 'darwin';
@@ -34,6 +35,7 @@ let mainWindow;
 
 // --- macOS safety layer: protected paths, iCloud awareness, undo vault ---
 let classifier = createClassifier({ home: os.homedir() });
+let icloudSyncedFolders = [];
 let vault = null;
 
 function execFileText(cmd, args) {
@@ -53,13 +55,21 @@ async function refreshClassifier() {
   if ((await execFileText('defaults', ['read', 'com.apple.finder', 'FXICloudDriveDocuments'])) === '1') {
     synced.push(path.join(home, 'Documents'));
   }
+  icloudSyncedFolders = synced;
   classifier = createClassifier({ home, icloudSyncedFolders: synced });
+}
+
+// Evicting removes the local copy of an iCloud file but keeps it in iCloud (nothing is deleted).
+function evictFile(p) {
+  return new Promise((resolve, reject) => {
+    execFile('brctl', ['evict', p], (err) => (err ? reject(err) : resolve()));
+  });
 }
 
 function scanOptions(opts) {
   if (!isMac) return {};
   return {
-    skip: classifier.makeSkip({ includeICloud: !!opts?.includeICloud }),
+    skip: classifier.makeSkip({ kinds: kindsFromOptions(opts) }),
     classify: classifier.classify,
     skipCloudOnly: true,
   };
@@ -195,14 +205,24 @@ ipcMain.handle('app:getVersion', () => app.getVersion());
 ipcMain.handle('drives:list', async () => listDrives());
 
 // --- quick clean ---
-ipcMain.handle('quickClean:scan', async (event) => {
+// Quick Clean's only iCloud aspect: freeing the local copy of old downloaded iCloud Drive
+// files (they stay in iCloud). Off unless the user ticks iCloud Drive.
+const evictableFor = (opts) => (opts?.icloud?.drive ? () => findEvictable({ home: os.homedir() }) : null);
+
+ipcMain.handle('quickClean:scan', async (event, opts) => {
   const onProgress = (progress) => event.sender.send('quickClean:progress', progress);
   if (isMac) {
-    return scanMac({ home: os.homedir(), tmpdir: os.tmpdir(), classify: classifier.classify, onProgress });
+    return scanMac({
+      home: os.homedir(),
+      tmpdir: os.tmpdir(),
+      classify: classifier.classify,
+      onProgress,
+      evictable: evictableFor(opts),
+    });
   }
   return scanQuickClean(onProgress);
 });
-ipcMain.handle('quickClean:cleanMany', async (_event, categoryIds) => {
+ipcMain.handle('quickClean:cleanMany', async (_event, categoryIds, opts) => {
   if (isMac) {
     return cleanMac(categoryIds, {
       home: os.homedir(),
@@ -211,6 +231,8 @@ ipcMain.handle('quickClean:cleanMany', async (_event, categoryIds) => {
       vault,
       systemTrash: trashOnMac,
       retentionDays: getSettings().undoRetentionDays,
+      evict: evictFile,
+      evictable: evictableFor(opts),
     });
   }
   let freed = 0;
@@ -326,12 +348,22 @@ async function trashOnMacWithUndo(filePaths, opts = {}) {
 
   // The vault lives on the startup disk; moving a big file from another disk into it
   // would be slow and eat startup-disk space, so those go to that disk's own Trash instead.
+  // The same goes for iCloud files that aren't downloaded: moving one out of iCloud would
+  // delete the only copy with nothing local to restore, so they go to the Trash, where
+  // iCloud also keeps them for 30 days under "Recently Deleted".
   const vaultDev = (await fs.promises.stat(vault.rootDir)).dev;
   const sameDisk = [];
   const otherDisk = [];
+  let cloudOnlyTrashed = 0;
   for (const p of allowed) {
     try {
-      ((await fs.promises.lstat(p)).dev === vaultDev ? sameDisk : otherDisk).push(p);
+      const st = await fs.promises.lstat(p);
+      if (classifier.classify(p).icloud && (await containsCloudOnly(p))) {
+        otherDisk.push(p);
+        cloudOnlyTrashed += 1;
+      } else {
+        (st.dev === vaultDev ? sameDisk : otherDisk).push(p);
+      }
     } catch {
       errors += 1;
     }
@@ -362,7 +394,7 @@ async function trashOnMacWithUndo(filePaths, opts = {}) {
     }
   }
 
-  return { freed, errors, batchId, blocked, sentToTrash };
+  return { freed, errors, batchId, blocked, sentToTrash, cloudOnlyTrashed };
 }
 
 ipcMain.handle('files:trash', async (_event, filePaths, opts) => {
@@ -412,6 +444,12 @@ ipcMain.on('platform:info', (event) => {
     home: os.homedir(),
     sep: path.sep,
     supportsUndo: isMac,
+    icloud: isMac
+      ? {
+          driveExists: fs.existsSync(path.join(os.homedir(), 'Library', 'Mobile Documents', 'com~apple~CloudDocs')),
+          syncedFolders: icloudSyncedFolders.map((p) => path.basename(p)),
+        }
+      : null,
   };
 });
 
@@ -448,4 +486,56 @@ ipcMain.handle('system:openFullDiskAccess', async () => {
 
 ipcMain.handle('updates:openReleases', async () => {
   await shell.openExternal(RELEASES_URL);
+});
+
+// --- iCloud Cleanup (macOS) ---
+ipcMain.handle('icloud:scan', async (event, scanId, opts) => {
+  if (!isMac) return { files: [], summary: null };
+  const controller = new AbortController();
+  activeScans.set(scanId, controller);
+  try {
+    return await scanICloud({
+      home: os.homedir(),
+      classify: classifier.classify,
+      kinds: kindsFromOptions(opts),
+      syncedFolders: icloudSyncedFolders,
+      olderThanYears: Math.max(0, Number(opts?.olderThanYears) || 5),
+      minSizeBytes: Math.max(0, Number(opts?.minSizeMB) || 0) * 1024 * 1024,
+      signal: controller.signal,
+      onProgress: (p) => event.sender.send('icloud:progress', { scanId, ...p }),
+    });
+  } finally {
+    activeScans.delete(scanId);
+  }
+});
+
+// Frees the local copy of iCloud files; they stay in iCloud and re-download when opened.
+ipcMain.handle('icloud:evict', async (_event, filePaths) => {
+  if (!isMac) return { evicted: 0, errors: 0, freed: 0 };
+  let evicted = 0;
+  let errors = 0;
+  let freed = 0;
+  for (const p of filePaths) {
+    const c = classifier.classify(p);
+    if (!c.icloud || c.protected || c.guarded) {
+      errors += 1;
+      continue;
+    }
+    try {
+      const st = await fs.promises.lstat(p);
+      const local = st.isDirectory() ? (await dirSize(p)).size : st.blocks * 512;
+      await evictFile(p);
+      evicted += 1;
+      freed += local;
+    } catch {
+      errors += 1;
+    }
+  }
+  return { evicted, errors, freed };
+});
+
+ipcMain.handle('icloud:openSettings', async () => {
+  if (!isMac) return false;
+  await shell.openExternal('x-apple.systempreferences:com.apple.preferences.AppleIDPrefPane');
+  return true;
 });

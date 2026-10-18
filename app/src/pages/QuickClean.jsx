@@ -7,6 +7,8 @@ import { formatBytes } from '../lib/format';
 import { useNotify } from '../lib/notifications';
 import UndoButton from '../components/UndoButton';
 import { isMac } from '../lib/platform';
+import ICloudToggle from '../components/ICloudToggle';
+import { useICloud } from '../lib/icloud';
 
 export default function QuickClean({ active }) {
   const [categories, setCategories] = useState([]);
@@ -15,6 +17,7 @@ export default function QuickClean({ active }) {
   const [cleaning, setCleaning] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [result, setResult] = useState(null);
+  const { opts: icloud } = useICloud();
   const notify = useNotify();
   const activeRef = useRef(active);
   const hasLoadedRef = useRef(false);
@@ -32,11 +35,17 @@ export default function QuickClean({ active }) {
   }, [active]);
 
   // keepResult: refresh the list after a clean without hiding the result banner (and its Undo button).
+  // Ticking/unticking iCloud adds or removes its Quick Clean item, so refresh the list.
+  useEffect(() => {
+    if (hasLoadedRef.current) scan();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [icloud.drive]);
+
   async function scan({ keepResult = false } = {}) {
     setScanning(true);
     if (!keepResult) setResult(null);
     try {
-      const data = await window.api.quickClean.scan();
+      const data = await window.api.quickClean.scan({ icloud: { drive: icloud.drive } });
       setCategories(data);
       // Never pre-tick anything permanent (e.g. emptying the Trash).
       setSelected(new Set(data.filter((c) => c.exists && c.size > 0 && !c.permanent).map((c) => c.id)));
@@ -61,7 +70,7 @@ export default function QuickClean({ active }) {
   async function runClean() {
     setConfirmOpen(false);
     setCleaning(true);
-    const r = await window.api.quickClean.cleanMany(selectedCategories.map((c) => c.id));
+    const r = await window.api.quickClean.cleanMany(selectedCategories.map((c) => c.id), { icloud: { drive: icloud.drive } });
     setResult({ freed: r.freed || 0, errors: r.errors || 0, batchId: r.batchId });
     setCleaning(false);
     if (!activeRef.current) notify(`Quick Clean ${isMac ? 'removed' : 'freed'} ${formatBytes(r.freed || 0)}.`);
@@ -73,10 +82,17 @@ export default function QuickClean({ active }) {
       title="Quick Clean"
       subtitle={isMac ? "Safe, one-click cleanup of caches, logs, old updates and developer leftovers." : "Safe, one-click cleanup of temp files, caches, and the recycle bin."}
       actions={
-        <button className="btn" onClick={scan} disabled={scanning || cleaning}>
-          <RefreshCw size={14} className={scanning ? 'spin' : ''} />
-          Rescan
-        </button>
+        <>
+          <ICloudToggle
+            aspects={['drive']}
+            disabled={scanning || cleaning}
+            title="Adds an option to free up space used by old iCloud Drive downloads. Nothing is deleted from iCloud."
+          />
+          <button className="btn" onClick={scan} disabled={scanning || cleaning}>
+            <RefreshCw size={14} className={scanning ? 'spin' : ''} />
+            Rescan
+          </button>
+        </>
       }
     >
       <div style={{ display: 'flex', flexDirection: 'column', height: '100%', gap: 16 }}>

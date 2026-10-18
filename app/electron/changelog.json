@@ -1,5 +1,15 @@
 [
   {
+    "version": "1.3.0",
+    "date": "2026-10-18",
+    "changes": [
+      "New iCloud Cleanup tool (Mac): finds files in iCloud that haven't been modified in 1\u201310 years (5 by default), lists them biggest-first with their dates, and lets you tick exactly which to delete.",
+      "Every tool now has an \"Include iCloud\" option \u2014 iCloud Drive, app data, and synced Desktop & Documents can each be switched on separately. Everything stays off until you tick it.",
+      "Quick Clean can free the local copy of old iCloud downloads while keeping the files safely in iCloud.",
+      "Deleting from iCloud always needs an extra confirmation. Files that are on your Mac can be undone; cloud-only files go to the Trash (and iCloud.com Recently Deleted for 30 days) so they're never lost for good by accident."
+    ]
+  },
+  {
     "version": "1.2.0",
     "date": "2026-10-18",
     "changes": [

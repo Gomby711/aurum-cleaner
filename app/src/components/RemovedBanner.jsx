@@ -25,8 +25,15 @@ export default function RemovedBanner({ result, onRestored }) {
             {isMac && result.batchId && (
               <span style={{ color: 'var(--text-2)' }}> Kept in Undo History so you can restore it.</span>
             )}
-            {isMac && result.sentToTrash > 0 && (
-              <span style={{ color: 'var(--text-2)' }}> {result.sentToTrash} item(s) on another disk went to its Trash instead.</span>
+            {isMac && result.cloudOnlyTrashed > 0 && (
+              <span style={{ color: 'var(--text-2)' }}>
+                {' '}
+                {result.cloudOnlyTrashed} item(s) weren't downloaded to this Mac, so they went to the Trash instead of Undo History.
+                You can still get them back from the Trash (Put Back) or from iCloud.com → Recently Deleted for 30 days.
+              </span>
+            )}
+            {isMac && result.sentToTrash - (result.cloudOnlyTrashed || 0) > 0 && (
+              <span style={{ color: 'var(--text-2)' }}> {result.sentToTrash - (result.cloudOnlyTrashed || 0)} item(s) on another disk went to its Trash instead.</span>
             )}
           </span>
           <UndoButton batchId={result.batchId} onRestored={onRestored} />
