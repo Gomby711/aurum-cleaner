@@ -1,6 +1,6 @@
 # Installing Aurum Cleaner on a Mac
 
-1. Download **Aurum Cleaner-x.y.z-universal.dmg** from the
+1. Download **Aurum-Cleaner-x.y.z-universal.dmg** from the
    [latest release](https://github.com/Gomby711/aurum-cleaner/releases/latest).
    It runs natively on both Apple Silicon and Intel Macs.
 2. Open the DMG and drag **Aurum Cleaner** onto the **Applications** folder.

@@ -49,7 +49,7 @@ npm test                 # safety-rule and undo tests
 
 ### Releasing
 
-Push a tag like `v1.1.0`; `.github/workflows/release.yml` builds Windows and macOS on
+Push a tag like `v1.2.0`; `.github/workflows/release.yml` builds Windows and macOS on
 GitHub's runners and attaches them to a draft release.
 
 **Making the Mac app open with no warning at all** needs an Apple Developer ID
