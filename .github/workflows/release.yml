@@ -55,3 +55,16 @@ jobs:
       - name: Build and publish (macOS, ad-hoc signed)
         if: runner.os == 'macOS' && env.HAS_APPLE_CERT != 'true'
         run: npx electron-builder --mac --publish always
+
+  # Both builds attach to one draft release; once they've both succeeded, publish it.
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION=$(node -p "require('./app/package.json').version")
+          gh release edit "v${VERSION}" --draft=false --latest --repo "${{ github.repository }}"
