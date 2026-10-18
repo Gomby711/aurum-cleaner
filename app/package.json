@@ -2,8 +2,8 @@
   "name": "aurum-cleaner",
   "productName": "Aurum Cleaner",
   "private": true,
-  "version": "1.0.0",
-  "description": "A premium, free storage-cleaning desktop app for Windows.",
+  "version": "1.1.0",
+  "description": "A premium, free storage-cleaning desktop app for Windows and macOS.",
   "author": "Aurum Cleaner",
   "main": "electron/main.cjs",
   "type": "module",
@@ -15,7 +15,10 @@
     "build:electron": "npm run build && electron-builder",
     "release": "npm run build && electron-builder --publish always",
     "lint": "oxlint",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "build:mac": "npm run build && electron-builder --mac",
+    "release:mac": "npm run build && electron-builder --mac --publish always",
+    "test": "node --test test/mac.test.cjs"
   },
   "dependencies": {
     "electron-updater": "^6.8.9",
@@ -57,6 +60,55 @@
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true
+    },
+    "afterSign": "build/adhocSign.cjs",
+    "mac": {
+      "category": "public.app-category.utilities",
+      "icon": "build/icon.png",
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "universal"
+          ]
+        },
+        {
+          "target": "zip",
+          "arch": [
+            "universal"
+          ]
+        }
+      ],
+      "hardenedRuntime": true,
+      "gatekeeperAssess": false,
+      "entitlements": "build/entitlements.mac.plist",
+      "entitlementsInherit": "build/entitlements.mac.plist",
+      "minimumSystemVersion": "11.0",
+      "extendInfo": {
+        "NSDesktopFolderUsageDescription": "Aurum Cleaner looks in your Desktop folder for large and duplicate files you may want to remove.",
+        "NSDocumentsFolderUsageDescription": "Aurum Cleaner looks in your Documents folder for large and duplicate files you may want to remove.",
+        "NSDownloadsFolderUsageDescription": "Aurum Cleaner looks in your Downloads folder for large and duplicate files you may want to remove.",
+        "NSRemovableVolumesUsageDescription": "Aurum Cleaner can analyze external drives you choose to scan.",
+        "NSAppleEventsUsageDescription": "Aurum Cleaner asks Finder to move leftover macOS installers to the Trash."
+      }
+    },
+    "dmg": {
+      "title": "Aurum Cleaner ${version}",
+      "contents": [
+        {
+          "x": 130,
+          "y": 220
+        },
+        {
+          "x": 410,
+          "y": 220,
+          "type": "link",
+          "path": "/Applications"
+        }
+      ]
+    },
+    "directories": {
+      "output": "release"
     }
   }
 }

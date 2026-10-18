@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { Search, Trash2, FileWarning, CheckCircle2 } from 'lucide-react';
+import { Search, Trash2, FileWarning, Cloud } from 'lucide-react';
 import PageShell from '../components/PageShell';
 import ConfirmModal from '../components/ConfirmModal';
 import LocationBar from '../components/LocationBar';
 import { formatBytes, formatDate } from '../lib/format';
 import { useNotify } from '../lib/notifications';
+import RemovedBanner from '../components/RemovedBanner';
+import { isMac, moveToTrashLabel, removedMessage } from '../lib/platform';
 
 export default function LargeFiles({ drives, defaultRoot, active }) {
   const [root, setRoot] = useState(defaultRoot);
@@ -17,6 +18,7 @@ export default function LargeFiles({ drives, defaultRoot, active }) {
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [result, setResult] = useState(null);
   const [scanId, setScanId] = useState(null);
+  const [includeICloud, setIncludeICloud] = useState(false);
   const notify = useNotify();
   const activeRef = useRef(active);
 
@@ -39,7 +41,7 @@ export default function LargeFiles({ drives, defaultRoot, active }) {
       if (p.scanId === id) setProgress(p);
     });
     try {
-      const results = await window.api.largeFiles.scan(id, root, minSize);
+      const results = await window.api.largeFiles.scan(id, root, minSize, { includeICloud });
       setFiles(results);
       setSelected(new Set());
       if (!activeRef.current) notify(`Large Files scan finished — ${results.length} file(s) found.`);
@@ -66,20 +68,25 @@ export default function LargeFiles({ drives, defaultRoot, active }) {
   const selectedFiles = files.filter((f) => selected.has(f.path));
   const totalSelected = selectedFiles.reduce((sum, f) => sum + f.size, 0);
 
+  const icloudSelected = selectedFiles.filter((f) => f.icloud).length;
+
   async function deleteSelected() {
     setConfirmOpen(false);
-    const r = await window.api.files.trash(selectedFiles.map((f) => f.path));
+    const r = await window.api.files.trash(selectedFiles.map((f) => f.path), {
+      allowICloud: icloudSelected > 0,
+      label: 'Large Files',
+    });
     setResult(r);
     setFiles((prev) => prev.filter((f) => !selected.has(f.path)));
     setSelected(new Set());
-    if (!activeRef.current) notify(`Large Files: sent ${formatBytes(r.freed)} to the Recycle Bin.`);
+    if (!activeRef.current) notify(`Large Files: ${removedMessage(r, formatBytes).toLowerCase()}.`);
   }
 
   return (
-    <PageShell title="Large Files" subtitle="Find the biggest space hogs on your drive and send them to the Recycle Bin.">
+    <PageShell title="Large Files" subtitle={`Find the biggest space hogs on your drive and send them to the ${isMac ? 'Undo History' : 'Recycle Bin'}.`}>
       <div style={{ display: 'flex', flexDirection: 'column', height: '100%', gap: 16 }}>
         <div className="glass-panel" style={{ padding: '14px 18px', display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-          <LocationBar drives={drives} root={root} onSelectDrive={(letter) => setRoot(`${letter}\\`)} onChooseFolder={chooseFolder} disabled={scanning} />
+          <LocationBar drives={drives} root={root} onSelectDrive={(d) => setRoot(d.root)} onChooseFolder={chooseFolder} disabled={scanning} includeICloud={includeICloud} onToggleICloud={setIncludeICloud} />
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <span style={{ fontSize: 12, color: 'var(--text-2)' }}>Min size (MB)</span>
             <input
@@ -106,23 +113,7 @@ export default function LargeFiles({ drives, defaultRoot, active }) {
           </div>
         )}
 
-        <AnimatePresence>
-          {result && (
-            <motion.div
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: 'auto' }}
-              exit={{ opacity: 0, height: 0 }}
-              className="glass-panel"
-              style={{ padding: '14px 20px', display: 'flex', alignItems: 'center', gap: 10, overflow: 'hidden' }}
-            >
-              <CheckCircle2 size={17} color="var(--success)" />
-              <span style={{ fontSize: 13 }}>
-                Sent <b>{formatBytes(result.freed)}</b> to the Recycle Bin
-                {result.errors > 0 ? ` — ${result.errors} file(s) skipped.` : '.'}
-              </span>
-            </motion.div>
-          )}
-        </AnimatePresence>
+        <RemovedBanner result={result} />
 
         {selectedFiles.length > 0 && (
           <div className="glass-panel" style={{ padding: '12px 18px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -130,7 +121,7 @@ export default function LargeFiles({ drives, defaultRoot, active }) {
               {selectedFiles.length} selected — {formatBytes(totalSelected)}
             </span>
             <button className="btn btn-danger" onClick={() => setConfirmOpen(true)}>
-              <Trash2 size={14} /> Move to Recycle Bin
+              <Trash2 size={14} /> {moveToTrashLabel}
             </button>
           </div>
         )}
@@ -146,7 +137,10 @@ export default function LargeFiles({ drives, defaultRoot, active }) {
             <label key={f.path} className="glass-panel" style={{ padding: '11px 16px', display: 'flex', alignItems: 'center', gap: 12, cursor: 'pointer' }}>
               <input type="checkbox" className="checkbox" checked={selected.has(f.path)} onChange={() => toggle(f.path)} />
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 13, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{f.name}</div>
+                <div style={{ fontSize: 13, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: 7 }}>
+                  {f.name}
+                  {f.icloud && <span className="risk-pill risk-low" style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}><Cloud size={10} /> iCloud</span>}
+                </div>
                 <div style={{ fontSize: 11, color: 'var(--text-2)', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                   {f.path} · modified {formatDate(f.modified)}
                 </div>
@@ -159,9 +153,10 @@ export default function LargeFiles({ drives, defaultRoot, active }) {
 
       <ConfirmModal
         open={confirmOpen}
-        title="Move to Recycle Bin?"
-        description={`${selectedFiles.length} file(s) totaling ${formatBytes(totalSelected)} will be moved to the Recycle Bin. You can restore them from there if needed.`}
-        confirmLabel="Move to Recycle Bin"
+        title={isMac ? 'Remove these files?' : 'Move to Recycle Bin?'}
+        description={`${selectedFiles.length} file(s) totaling ${formatBytes(totalSelected)} will be ${isMac ? 'removed. You can undo this from the banner afterwards or from Undo History' : 'moved to the Recycle Bin. You can restore them from there if needed'}.${icloudSelected > 0 ? ` ${icloudSelected} of them are in iCloud.` : ''}`}
+        ackLabel={icloudSelected > 0 ? 'I understand iCloud files are also deleted from iCloud.com and my other devices.' : undefined}
+        confirmLabel={moveToTrashLabel}
         danger
         onConfirm={deleteSelected}
         onCancel={() => setConfirmOpen(false)}

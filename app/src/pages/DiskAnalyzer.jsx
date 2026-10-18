@@ -1,12 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
 import { Treemap, ResponsiveContainer } from 'recharts';
-import { Search, ChevronLeft, Trash2, CheckCircle2 } from 'lucide-react';
-import { AnimatePresence, motion } from 'framer-motion';
+import { Search, ChevronLeft, Trash2, Cloud } from 'lucide-react';
 import PageShell from '../components/PageShell';
 import ConfirmModal from '../components/ConfirmModal';
 import LocationBar from '../components/LocationBar';
 import { formatBytes } from '../lib/format';
 import { useNotify } from '../lib/notifications';
+import RemovedBanner from '../components/RemovedBanner';
+import { isMac, moveToTrashLabel, removedMessage } from '../lib/platform';
 
 const PALETTE = ['#f4e2a6', '#e8c874', '#d4af37', '#c19a2e', '#a9821f', '#8a6a19'];
 
@@ -21,6 +22,7 @@ export default function DiskAnalyzer({ drives, defaultRoot, active }) {
   const [selected, setSelected] = useState(new Set());
   const [result, setResult] = useState(null);
   const [scanId, setScanId] = useState(null);
+  const [includeICloud, setIncludeICloud] = useState(false);
   const notify = useNotify();
   const activeRef = useRef(active);
 
@@ -37,8 +39,8 @@ export default function DiskAnalyzer({ drives, defaultRoot, active }) {
     }
   }
 
-  function selectDrive(letter) {
-    setRoot(`${letter}\\`);
+  function selectDrive(drive) {
+    setRoot(drive.root);
     setHistory([]);
     setTree(null);
     setSelected(new Set());
@@ -54,7 +56,7 @@ export default function DiskAnalyzer({ drives, defaultRoot, active }) {
       if (p.scanId === id) setProgress(p);
     });
     try {
-      const result = await window.api.diskAnalyzer.scan(id, path, 1);
+      const result = await window.api.diskAnalyzer.scan(id, path, 1, { includeICloud });
       if (pushHistory && tree && tree.path !== path) {
         setHistory((h) => [...h, tree.path]);
       }
@@ -97,18 +99,20 @@ export default function DiskAnalyzer({ drives, defaultRoot, active }) {
   const selectedItems = data.filter((c) => c.type === 'file' && selected.has(c.path));
   const selectedTotal = selectedItems.reduce((sum, c) => sum + c.size, 0);
 
+  const icloudSelected = selectedItems.filter((c) => c.icloud).length;
+
   async function deleteSelected() {
     setBulkConfirmOpen(false);
     const paths = selectedItems.map((c) => c.path);
-    const r = await window.api.files.trash(paths);
-    setResult(r);
+    const r = await window.api.files.trash(paths, { allowICloud: icloudSelected > 0, label: 'Disk Analyzer' });
     setSelected(new Set());
-    if (!activeRef.current) notify(`Disk Analyzer: sent ${formatBytes(r.freed)} to the Recycle Bin.`);
-    scan(root, false, true);
+    if (!activeRef.current) notify(`Disk Analyzer: ${removedMessage(r, formatBytes).toLowerCase()}.`);
+    await scan(root, false, true);
+    setResult(r);
   }
 
   return (
-    <PageShell title="Disk Analyzer" subtitle="A WinDirStat-style map of exactly what's taking up your space.">
+    <PageShell title="Disk Analyzer" subtitle="A visual map of exactly what's taking up your space.">
       <div style={{ display: 'flex', flexDirection: 'column', height: '100%', gap: 16 }}>
         <div className="glass-panel" style={{ padding: '14px 18px', display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
           {history.length > 0 && (
@@ -116,7 +120,7 @@ export default function DiskAnalyzer({ drives, defaultRoot, active }) {
               <ChevronLeft size={14} />
             </button>
           )}
-          <LocationBar drives={drives} root={root} onSelectDrive={selectDrive} onChooseFolder={chooseFolder} disabled={scanning} />
+          <LocationBar drives={drives} root={root} onSelectDrive={selectDrive} onChooseFolder={chooseFolder} disabled={scanning} includeICloud={includeICloud} onToggleICloud={setIncludeICloud} />
           <div style={{ flex: 1 }} />
           {scanning ? (
             <button className="btn" onClick={cancelScan}>Cancel</button>
@@ -139,28 +143,12 @@ export default function DiskAnalyzer({ drives, defaultRoot, active }) {
               {selectedItems.length} selected — {formatBytes(selectedTotal)}
             </span>
             <button className="btn btn-danger" onClick={() => setBulkConfirmOpen(true)}>
-              <Trash2 size={14} /> Move to Recycle Bin
+              <Trash2 size={14} /> {moveToTrashLabel}
             </button>
           </div>
         )}
 
-        <AnimatePresence>
-          {result && (
-            <motion.div
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: 'auto' }}
-              exit={{ opacity: 0, height: 0 }}
-              className="glass-panel"
-              style={{ padding: '14px 20px', display: 'flex', alignItems: 'center', gap: 10, overflow: 'hidden' }}
-            >
-              <CheckCircle2 size={17} color="var(--success)" />
-              <span style={{ fontSize: 13 }}>
-                Sent <b>{formatBytes(result.freed)}</b> to the Recycle Bin
-                {result.errors > 0 ? ` — ${result.errors} file(s) skipped.` : '.'}
-              </span>
-            </motion.div>
-          )}
-        </AnimatePresence>
+        <RemovedBanner result={result} />
 
         {!scanning && tree && (
           <div style={{ flex: 1, minHeight: 0, display: 'flex', gap: 16 }}>
@@ -200,6 +188,7 @@ export default function DiskAnalyzer({ drives, defaultRoot, active }) {
                       <span style={{ width: 8, height: 8, borderRadius: 2, background: PALETTE[i % PALETTE.length], flexShrink: 0 }} />
                     )}
                     <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--text-1)' }}>{c.name}</span>
+                    {c.icloud && <Cloud size={11} color="var(--text-2)" title="In iCloud" style={{ flexShrink: 0 }} />}
                     <span style={{ color: 'var(--text-2)', flexShrink: 0 }}>{formatBytes(c.size)}</span>
                     {c.type === 'file' && (
                       <button
@@ -229,24 +218,28 @@ export default function DiskAnalyzer({ drives, defaultRoot, active }) {
 
       <ConfirmModal
         open={!!confirmTarget}
-        title="Move to Recycle Bin?"
-        description={confirmTarget ? `"${confirmTarget.name}" (${formatBytes(confirmTarget.size)}) will be moved to the Recycle Bin.` : ''}
-        confirmLabel="Move to Recycle Bin"
+        title={isMac ? 'Remove this file?' : 'Move to Recycle Bin?'}
+        description={confirmTarget ? `"${confirmTarget.name}" (${formatBytes(confirmTarget.size)}) will be ${isMac ? 'removed. You can undo this afterwards' : 'moved to the Recycle Bin'}.${confirmTarget.icloud ? ' It is stored in iCloud.' : ''}` : ''}
+        ackLabel={confirmTarget?.icloud ? 'I understand this file is also deleted from iCloud.com and my other devices.' : undefined}
+        confirmLabel={isMac ? 'Remove' : 'Move to Recycle Bin'}
         danger
         onConfirm={async () => {
-          const r = await window.api.files.trash([confirmTarget.path]);
-          if (!activeRef.current) notify(`Disk Analyzer: sent ${formatBytes(r.freed)} to the Recycle Bin.`);
+          const target = confirmTarget;
           setConfirmTarget(null);
-          scan(root, false, true);
+          const r = await window.api.files.trash([target.path], { allowICloud: !!target.icloud, label: 'Disk Analyzer' });
+          if (!activeRef.current) notify(`Disk Analyzer: ${removedMessage(r, formatBytes).toLowerCase()}.`);
+          await scan(root, false, true);
+          setResult(r);
         }}
         onCancel={() => setConfirmTarget(null)}
       />
 
       <ConfirmModal
         open={bulkConfirmOpen}
-        title="Move selected files to Recycle Bin?"
-        description={`${selectedItems.length} file(s) totaling ${formatBytes(selectedTotal)} will be moved to the Recycle Bin. You can restore them from there if needed.`}
-        confirmLabel="Move to Recycle Bin"
+        title={isMac ? 'Remove selected files?' : 'Move selected files to Recycle Bin?'}
+        description={`${selectedItems.length} file(s) totaling ${formatBytes(selectedTotal)} will be ${isMac ? 'removed. You can undo this afterwards' : 'moved to the Recycle Bin. You can restore them from there if needed'}.${icloudSelected > 0 ? ` ${icloudSelected} of them are in iCloud.` : ''}`}
+        ackLabel={icloudSelected > 0 ? 'I understand iCloud files are also deleted from iCloud.com and my other devices.' : undefined}
+        confirmLabel={isMac ? 'Remove' : 'Move to Recycle Bin'}
         danger
         onConfirm={deleteSelected}
         onCancel={() => setBulkConfirmOpen(false)}

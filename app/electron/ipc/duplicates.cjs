@@ -14,7 +14,7 @@ async function hashFile(filePath) {
   });
 }
 
-async function findDuplicates(rootPath, { signal, onProgress, minSizeBytes = 1024 * 1024 } = {}) {
+async function findDuplicates(rootPath, { signal, onProgress, minSizeBytes = 1024 * 1024, skip, skipCloudOnly = false } = {}) {
   const bySize = new Map();
 
   async function walk(dir) {
@@ -29,6 +29,7 @@ async function findDuplicates(rootPath, { signal, onProgress, minSizeBytes = 102
       if (signal && signal.aborted) return;
       if (entry.isSymbolicLink()) continue;
       const full = path.join(dir, entry.name);
+      if (skip && skip(full)) continue;
       if (entry.isDirectory()) {
         if (SKIP_DIRS.has(entry.name)) continue;
         await walk(full);
@@ -36,6 +37,8 @@ async function findDuplicates(rootPath, { signal, onProgress, minSizeBytes = 102
         try {
           const stat = await fs.promises.stat(full);
           if (stat.size < minSizeBytes) continue;
+          // Don't hash iCloud files that aren't stored locally — reading them would force a download.
+          if (skipCloudOnly && stat.blocks === 0) continue;
           const arr = bySize.get(stat.size) || [];
           arr.push(full);
           bySize.set(stat.size, arr);

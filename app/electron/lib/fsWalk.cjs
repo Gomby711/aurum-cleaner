@@ -3,7 +3,7 @@ const path = require('path');
 
 // Recursively sums the size of a directory. Tolerates permission errors,
 // junctions/symlinks (skipped to avoid cycles), and reparse points.
-async function dirSize(dirPath, { signal } = {}) {
+async function dirSize(dirPath, { signal, skip } = {}) {
   let total = 0;
   let fileCount = 0;
 
@@ -19,6 +19,7 @@ async function dirSize(dirPath, { signal } = {}) {
       if (signal && signal.aborted) return;
       if (entry.isSymbolicLink()) continue;
       const full = path.join(current, entry.name);
+      if (skip && skip(full)) continue;
       if (entry.isDirectory()) {
         await walk(full);
       } else if (entry.isFile()) {
@@ -39,7 +40,7 @@ async function dirSize(dirPath, { signal } = {}) {
 
 // Builds a shallow tree (depth-limited) of folder sizes for treemap rendering.
 // Deeper content is aggregated into the folder's total but not expanded further.
-async function buildTree(rootPath, maxDepth, { signal, onProgress } = {}) {
+async function buildTree(rootPath, maxDepth, { signal, onProgress, skip, classify } = {}) {
   let scanned = 0;
 
   async function node(current, depth) {
@@ -68,7 +69,7 @@ async function buildTree(rootPath, maxDepth, { signal, onProgress } = {}) {
     if (onProgress && scanned % 25 === 0) onProgress({ scanned, current });
 
     if (depth >= maxDepth) {
-      const { size } = await dirSize(current, { signal });
+      const { size } = await dirSize(current, { signal, skip });
       return { name, path: current, size, type: 'folder', children: [], collapsed: true };
     }
 
@@ -78,8 +79,10 @@ async function buildTree(rootPath, maxDepth, { signal, onProgress } = {}) {
       if (signal && signal.aborted) return null;
       if (entry.isSymbolicLink()) continue;
       const full = path.join(current, entry.name);
+      if (skip && skip(full)) continue;
       const child = await node(full, depth + 1);
       if (child) {
+        if (classify && classify(full).icloud) child.icloud = true;
         children.push(child);
         size += child.size;
       }

@@ -112,35 +112,32 @@ async function removeSafe(p) {
   }
 }
 
-async function cleanStaleItems(items) {
+// `stage(paths)` (macOS) moves the paths into the Undo vault instead of deleting them.
+async function cleanStaleItems(items, { stage } = {}) {
   let freed = 0;
+  const paths = [];
   for (const item of items) {
     if (item.type === 'project') {
       const projPath = item.path;
       const jsonlFiles = (await safeReaddir(projPath)).filter(
         (e) => e.isFile() && e.name.endsWith('.jsonl')
       );
-      for (const f of jsonlFiles) {
-        const full = path.join(projPath, f.name);
-        freed += await sizeOfPath(full);
-        await removeSafe(full);
-      }
+      for (const f of jsonlFiles) paths.push(path.join(projPath, f.name));
       for (const id of item.linkedIds || []) {
-        const jobPath = path.join(jobsDir, id);
-        const histPath = path.join(historyDir, id);
-        const linkPath = path.join(projPath, id);
-        freed += await sizeOfPath(jobPath);
-        freed += await sizeOfPath(histPath);
-        freed += await sizeOfPath(linkPath);
-        await removeSafe(jobPath);
-        await removeSafe(histPath);
-        await removeSafe(linkPath);
+        paths.push(path.join(jobsDir, id), path.join(historyDir, id), path.join(projPath, id));
       }
     } else {
-      freed += await sizeOfPath(item.path);
-      await removeSafe(item.path);
+      paths.push(item.path);
     }
   }
+
+  for (const p of paths) freed += await sizeOfPath(p);
+
+  if (stage) {
+    const r = await stage(paths.filter((p) => fs.existsSync(p)));
+    return { freed, batchId: r.batchId };
+  }
+  for (const p of paths) await removeSafe(p);
   return { freed };
 }
 

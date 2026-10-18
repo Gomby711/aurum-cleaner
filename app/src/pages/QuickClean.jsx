@@ -1,10 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { RefreshCw, Sparkles, CheckCircle2 } from 'lucide-react';
+import { RefreshCw, Sparkles, CheckCircle2, ShieldCheck, Lock } from 'lucide-react';
 import PageShell from '../components/PageShell';
 import ConfirmModal from '../components/ConfirmModal';
 import { formatBytes } from '../lib/format';
 import { useNotify } from '../lib/notifications';
+import UndoButton from '../components/UndoButton';
+import { isMac } from '../lib/platform';
 
 export default function QuickClean({ active }) {
   const [categories, setCategories] = useState([]);
@@ -29,13 +31,15 @@ export default function QuickClean({ active }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [active]);
 
-  async function scan() {
+  // keepResult: refresh the list after a clean without hiding the result banner (and its Undo button).
+  async function scan({ keepResult = false } = {}) {
     setScanning(true);
-    setResult(null);
+    if (!keepResult) setResult(null);
     try {
       const data = await window.api.quickClean.scan();
       setCategories(data);
-      setSelected(new Set(data.filter((c) => c.exists && c.size > 0).map((c) => c.id)));
+      // Never pre-tick anything permanent (e.g. emptying the Trash).
+      setSelected(new Set(data.filter((c) => c.exists && c.size > 0 && !c.permanent).map((c) => c.id)));
       if (!activeRef.current) notify('Quick Clean scan finished.');
     } finally {
       setScanning(false);
@@ -57,23 +61,17 @@ export default function QuickClean({ active }) {
   async function runClean() {
     setConfirmOpen(false);
     setCleaning(true);
-    let freed = 0;
-    let errors = 0;
-    for (const cat of selectedCategories) {
-      const r = await window.api.quickClean.clean(cat.id);
-      freed += r.freed || 0;
-      errors += r.errors || 0;
-    }
-    setResult({ freed, errors });
+    const r = await window.api.quickClean.cleanMany(selectedCategories.map((c) => c.id));
+    setResult({ freed: r.freed || 0, errors: r.errors || 0, batchId: r.batchId });
     setCleaning(false);
-    if (!activeRef.current) notify(`Quick Clean freed ${formatBytes(freed)}.`);
-    scan();
+    if (!activeRef.current) notify(`Quick Clean ${isMac ? 'removed' : 'freed'} ${formatBytes(r.freed || 0)}.`);
+    scan({ keepResult: true });
   }
 
   return (
     <PageShell
       title="Quick Clean"
-      subtitle="Safe, one-click cleanup of temp files, caches, and the recycle bin."
+      subtitle={isMac ? "Safe, one-click cleanup of caches, logs, old updates and developer leftovers." : "Safe, one-click cleanup of temp files, caches, and the recycle bin."}
       actions={
         <button className="btn" onClick={scan} disabled={scanning || cleaning}>
           <RefreshCw size={14} className={scanning ? 'spin' : ''} />
@@ -119,6 +117,13 @@ export default function QuickClean({ active }) {
           </button>
         </div>
 
+        {isMac && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 12.5, color: 'var(--text-2)', padding: '0 4px' }}>
+            <ShieldCheck size={15} color="var(--success)" />
+            Messages, Mail, Calendar, Photos, Notes and everything in iCloud are never touched by Quick Clean.
+          </div>
+        )}
+
         <AnimatePresence>
           {result && (
             <motion.div
@@ -129,10 +134,14 @@ export default function QuickClean({ active }) {
               style={{ padding: '14px 20px', display: 'flex', alignItems: 'center', gap: 10, overflow: 'hidden' }}
             >
               <CheckCircle2 size={17} color="var(--success)" />
-              <span style={{ fontSize: 13 }}>
-                Freed <b>{formatBytes(result.freed)}</b>
+              <span style={{ fontSize: 13, flex: 1 }}>
+                {isMac ? 'Removed' : 'Freed'} <b>{formatBytes(result.freed)}</b>
                 {result.errors > 0 ? ` — ${result.errors} item(s) were skipped (in use).` : '.'}
+                {isMac && result.batchId && (
+                  <span style={{ color: 'var(--text-2)' }}> Kept in Undo History — free the space for good from there when you're happy.</span>
+                )}
               </span>
+              <UndoButton batchId={result.batchId} onRestored={() => scan({ keepResult: true })} />
             </motion.div>
           )}
         </AnimatePresence>
@@ -161,9 +170,16 @@ export default function QuickClean({ active }) {
               <div style={{ flex: 1 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                   <span style={{ fontSize: 13.5, fontWeight: 600 }}>{cat.label}</span>
-                  <span className={`risk-pill risk-${cat.risk}`}>{cat.risk}</span>
+                  <span className={`risk-pill risk-${cat.risk === 'permanent' ? 'low' : cat.risk}`}>
+                    {cat.risk === 'permanent' ? 'permanent' : cat.risk}
+                  </span>
                 </div>
                 <div style={{ fontSize: 12, color: 'var(--text-2)', marginTop: 2 }}>{cat.description}</div>
+                {cat.needsFullDiskAccess && (
+                  <div style={{ fontSize: 11.5, color: 'var(--gold-300)', marginTop: 4, display: 'flex', alignItems: 'center', gap: 5 }}>
+                    <Lock size={11} /> macOS is blocking access. Grant Full Disk Access in Settings to include this.
+                  </div>
+                )}
               </div>
               <div style={{ fontSize: 15, fontWeight: 700, minWidth: 90, textAlign: 'right' }}>
                 {scanning ? '…' : formatBytes(cat.size)}
@@ -176,7 +192,11 @@ export default function QuickClean({ active }) {
       <ConfirmModal
         open={confirmOpen}
         title="Clean selected items?"
-        description={`This will permanently remove ${formatBytes(totalSelected)} of temporary/cache data across ${selectedCategories.length} categories. This action cannot be undone (the Recycle Bin category empties it permanently).`}
+        description={
+          isMac
+            ? `This will remove ${formatBytes(totalSelected)} of cache and junk data across ${selectedCategories.length} categories. You'll get an Undo button right after.${selectedCategories.some((c) => c.permanent) ? ' Emptying the Trash is permanent and cannot be undone.' : ''}`
+            : `This will permanently remove ${formatBytes(totalSelected)} of temporary/cache data across ${selectedCategories.length} categories. This action cannot be undone (the Recycle Bin category empties it permanently).`
+        }
         confirmLabel="Clean now"
         onConfirm={runClean}
         onCancel={() => setConfirmOpen(false)}

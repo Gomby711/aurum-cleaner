@@ -5,6 +5,8 @@ import PageShell from '../components/PageShell';
 import ConfirmModal from '../components/ConfirmModal';
 import { formatBytes, formatDate, daysAgo } from '../lib/format';
 import { useNotify } from '../lib/notifications';
+import UndoButton from '../components/UndoButton';
+import { isMac } from '../lib/platform';
 
 export default function ClaudeCleanup({ active }) {
   const [threshold, setThreshold] = useState(5);
@@ -41,9 +43,10 @@ export default function ClaudeCleanup({ active }) {
     ...data.orphanHistory.map((p) => ({ ...p, key: `orphan-history:${p.path}` })),
   ];
 
-  async function scan() {
+  // keepResult: refresh the list after a clean without hiding the result banner (and its Undo button).
+  async function scan({ keepResult = false } = {}) {
     setScanning(true);
-    setResult(null);
+    if (!keepResult) setResult(null);
     try {
       const d = await window.api.claudeCleanup.scan(threshold);
       setData(d);
@@ -78,7 +81,7 @@ export default function ClaudeCleanup({ active }) {
     setResult(r);
     setCleaning(false);
     if (!activeRef.current) notify(`Claude Cleanup freed ${formatBytes(r.freed)}.`);
-    scan();
+    scan({ keepResult: true });
   }
 
   return (
@@ -132,7 +135,11 @@ export default function ClaudeCleanup({ active }) {
               style={{ padding: '14px 20px', display: 'flex', alignItems: 'center', gap: 10, overflow: 'hidden' }}
             >
               <CheckCircle2 size={17} color="var(--success)" />
-              <span style={{ fontSize: 13 }}>Freed <b>{formatBytes(result.freed)}</b> of disk space.</span>
+              <span style={{ fontSize: 13, flex: 1 }}>
+                {isMac ? 'Removed' : 'Freed'} <b>{formatBytes(result.freed)}</b>.
+                {isMac && result.batchId && <span style={{ color: 'var(--text-2)' }}> Kept in Undo History so you can restore it.</span>}
+              </span>
+              <UndoButton batchId={result.batchId} onRestored={() => scan({ keepResult: true })} />
             </motion.div>
           )}
         </AnimatePresence>
@@ -170,7 +177,7 @@ export default function ClaudeCleanup({ active }) {
       <ConfirmModal
         open={confirmOpen}
         title="Clean stale Claude data?"
-        description={`This will permanently delete ${formatBytes(totalSize)} of chat logs, job data, and file-history for ${chosen.length} stale item(s). Active projects are never touched.`}
+        description={`This will ${isMac ? 'remove (undo available)' : 'permanently delete'} ${formatBytes(totalSize)} of chat logs, job data, and file-history for ${chosen.length} stale item(s). Active projects are never touched.`}
         confirmLabel="Clean now"
         onConfirm={runClean}
         onCancel={() => setConfirmOpen(false)}

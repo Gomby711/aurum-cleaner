@@ -1,0 +1,70 @@
+name: Release
+
+# Pushing a tag like v1.1.0 builds the Windows installer and the macOS DMG/ZIP and
+# attaches them to a draft GitHub release. Publish the draft to ship it.
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        working-directory: app
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      # macOS signing + notarization. Optional: when these secrets are missing the app is
+      # ad-hoc signed instead (users clear a one-time prompt in System Settings).
+      CSC_LINK: ${{ secrets.MAC_CERT_P12_BASE64 }}
+      CSC_KEY_PASSWORD: ${{ secrets.MAC_CERT_PASSWORD }}
+      APPLE_ID: ${{ secrets.APPLE_ID }}
+      APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+      HAS_APPLE_CERT: ${{ secrets.MAC_CERT_P12_BASE64 != '' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+      - run: npm ci
+      - run: npm run build
+
+      - name: Build and publish (Windows)
+        if: runner.os == 'Windows'
+        run: npx electron-builder --win --publish always
+
+      - name: Test (macOS)
+        if: runner.os == 'macOS'
+        run: npm test
+
+      - name: Build and publish (macOS, signed + notarized)
+        if: runner.os == 'macOS' && env.HAS_APPLE_CERT == 'true'
+        run: npx electron-builder --mac --publish always -c.mac.notarize=true
+
+      - name: Build and publish (macOS, ad-hoc signed)
+        if: runner.os == 'macOS' && env.HAS_APPLE_CERT != 'true'
+        run: npx electron-builder --mac --publish always
+
+  # Both builds attach to one draft release; once they've both succeeded, publish it.
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION=$(node -p "require('./app/package.json').version")
+          gh release edit "v${VERSION}" --draft=false --latest --repo "${{ github.repository }}"
