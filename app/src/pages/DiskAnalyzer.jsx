@@ -6,6 +6,7 @@ import ConfirmModal from '../components/ConfirmModal';
 import LocationBar from '../components/LocationBar';
 import { formatBytes } from '../lib/format';
 import { useNotify } from '../lib/notifications';
+import { useICloud } from '../lib/icloud';
 import RemovedBanner from '../components/RemovedBanner';
 import { isMac, moveToTrashLabel, removedMessage } from '../lib/platform';
 
@@ -22,7 +23,7 @@ export default function DiskAnalyzer({ drives, defaultRoot, active }) {
   const [selected, setSelected] = useState(new Set());
   const [result, setResult] = useState(null);
   const [scanId, setScanId] = useState(null);
-  const [includeICloud, setIncludeICloud] = useState(false);
+  const { opts: icloud } = useICloud();
   const notify = useNotify();
   const activeRef = useRef(active);
 
@@ -56,7 +57,7 @@ export default function DiskAnalyzer({ drives, defaultRoot, active }) {
       if (p.scanId === id) setProgress(p);
     });
     try {
-      const result = await window.api.diskAnalyzer.scan(id, path, 1, { includeICloud });
+      const result = await window.api.diskAnalyzer.scan(id, path, 1, { icloud });
       if (pushHistory && tree && tree.path !== path) {
         setHistory((h) => [...h, tree.path]);
       }
@@ -120,7 +121,7 @@ export default function DiskAnalyzer({ drives, defaultRoot, active }) {
               <ChevronLeft size={14} />
             </button>
           )}
-          <LocationBar drives={drives} root={root} onSelectDrive={selectDrive} onChooseFolder={chooseFolder} disabled={scanning} includeICloud={includeICloud} onToggleICloud={setIncludeICloud} />
+          <LocationBar drives={drives} root={root} onSelectDrive={selectDrive} onChooseFolder={chooseFolder} disabled={scanning} />
           <div style={{ flex: 1 }} />
           {scanning ? (
             <button className="btn" onClick={cancelScan}>Cancel</button>

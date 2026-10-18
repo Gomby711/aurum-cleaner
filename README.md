@@ -24,10 +24,11 @@ around the same idea, expanded into a full toolset. Mac users: see
 - **Large Files** — find and remove (to Recycle Bin) oversized files
 - **Duplicates** — find and remove duplicate files by content hash
 - **Claude Cleanup** — the original `cleanup.ps1` logic, built into the app
+- **iCloud Cleanup** *(macOS)* — list iCloud files not modified in 5+ years (configurable) and pick what to delete
 - **Undo History** *(macOS)* — everything removed can be restored with one click
 
 On macOS, Quick Clean only touches caches, logs, old updates and developer leftovers —
-never Messages, Mail, Calendar, Photos, Notes or iCloud. iCloud is opt-in per scan and
+never Messages, Mail, Calendar, Photos, Notes or iCloud. iCloud is opt-in in every tool and
 needs an extra confirmation before anything in it is deleted.
 
 ### Development
@@ -49,7 +50,7 @@ npm test                 # safety-rule and undo tests
 
 ### Releasing
 
-Push a tag like `v1.2.0`; `.github/workflows/release.yml` builds Windows and macOS on
+Push a tag like `v1.3.0`; `.github/workflows/release.yml` builds Windows and macOS on
 GitHub's runners and attaches them to a draft release.
 
 **Making the Mac app open with no warning at all** needs an Apple Developer ID

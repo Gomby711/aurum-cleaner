@@ -8,6 +8,7 @@ import {
   Copy,
   Bot,
   Undo2,
+  Cloud,
   Settings as SettingsIcon,
 } from 'lucide-react';
 
@@ -18,6 +19,7 @@ const NAV_ITEMS = [
   { id: 'large-files', label: 'Large Files', icon: FileWarning },
   { id: 'duplicates', label: 'Duplicates', icon: Copy },
   { id: 'claude-cleanup', label: 'Claude Cleanup', icon: Bot },
+  { id: 'icloud', label: 'iCloud Cleanup', icon: Cloud, macOnly: true },
   { id: 'undo', label: 'Undo History', icon: Undo2, macOnly: true },
   { id: 'settings', label: 'Settings', icon: SettingsIcon },
 ];

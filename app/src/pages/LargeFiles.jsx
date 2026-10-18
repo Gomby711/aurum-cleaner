@@ -5,6 +5,7 @@ import ConfirmModal from '../components/ConfirmModal';
 import LocationBar from '../components/LocationBar';
 import { formatBytes, formatDate } from '../lib/format';
 import { useNotify } from '../lib/notifications';
+import { useICloud } from '../lib/icloud';
 import RemovedBanner from '../components/RemovedBanner';
 import { isMac, moveToTrashLabel, removedMessage } from '../lib/platform';
 
@@ -18,7 +19,7 @@ export default function LargeFiles({ drives, defaultRoot, active }) {
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [result, setResult] = useState(null);
   const [scanId, setScanId] = useState(null);
-  const [includeICloud, setIncludeICloud] = useState(false);
+  const { opts: icloud } = useICloud();
   const notify = useNotify();
   const activeRef = useRef(active);
 
@@ -41,7 +42,7 @@ export default function LargeFiles({ drives, defaultRoot, active }) {
       if (p.scanId === id) setProgress(p);
     });
     try {
-      const results = await window.api.largeFiles.scan(id, root, minSize, { includeICloud });
+      const results = await window.api.largeFiles.scan(id, root, minSize, { icloud });
       setFiles(results);
       setSelected(new Set());
       if (!activeRef.current) notify(`Large Files scan finished — ${results.length} file(s) found.`);
@@ -86,7 +87,7 @@ export default function LargeFiles({ drives, defaultRoot, active }) {
     <PageShell title="Large Files" subtitle={`Find the biggest space hogs on your drive and send them to the ${isMac ? 'Undo History' : 'Recycle Bin'}.`}>
       <div style={{ display: 'flex', flexDirection: 'column', height: '100%', gap: 16 }}>
         <div className="glass-panel" style={{ padding: '14px 18px', display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-          <LocationBar drives={drives} root={root} onSelectDrive={(d) => setRoot(d.root)} onChooseFolder={chooseFolder} disabled={scanning} includeICloud={includeICloud} onToggleICloud={setIncludeICloud} />
+          <LocationBar drives={drives} root={root} onSelectDrive={(d) => setRoot(d.root)} onChooseFolder={chooseFolder} disabled={scanning} />
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <span style={{ fontSize: 12, color: 'var(--text-2)' }}>Min size (MB)</span>
             <input

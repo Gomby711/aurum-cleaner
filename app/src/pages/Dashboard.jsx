@@ -6,8 +6,11 @@ import StatCard from '../components/StatCard';
 import PageShell from '../components/PageShell';
 import { formatBytes } from '../lib/format';
 import { isMac } from '../lib/platform';
+import ICloudToggle from '../components/ICloudToggle';
+import { useICloud } from '../lib/icloud';
 
 export default function Dashboard({ drives, activeDrive, onSelectDrive, onNavigate }) {
+  const { opts: icloud } = useICloud();
   const [breakdown, setBreakdown] = useState(null);
   const [scanning, setScanning] = useState(false);
   const [scanned, setScanned] = useState(0);
@@ -29,7 +32,7 @@ export default function Dashboard({ drives, activeDrive, onSelectDrive, onNaviga
       if (p.scanId === scanId) setScanned(p.scanned || 0);
     });
     try {
-      const tree = await window.api.diskAnalyzer.scan(scanId, drive.root, 1);
+      const tree = await window.api.diskAnalyzer.scan(scanId, drive.root, 1, { icloud });
       setBreakdown(tree);
     } finally {
       unsub();
@@ -46,6 +49,7 @@ export default function Dashboard({ drives, activeDrive, onSelectDrive, onNaviga
       subtitle="A bird's-eye view of your storage, right where you need it."
       actions={
         <>
+          <ICloudToggle disabled={scanning} title="Include iCloud in the folder breakdown, then press Rescan." />
           <select
             value={activeDrive}
             onChange={(e) => onSelectDrive(e.target.value)}

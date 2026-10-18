@@ -37,7 +37,13 @@ const PROTECTED_LIBRARY_PREFIXES = [
   'Group Containers/group.com.apple',
 ];
 
-const ICLOUD_LIBRARY_DIRS = ['Mobile Documents', 'CloudStorage'];
+// iCloud locations, by "aspect" so each tool can let the user pick which to include:
+//   drive   — iCloud Drive proper (Mobile Documents/com~apple~CloudDocs)
+//   apps    — other apps' iCloud folders (Mobile Documents/iCloud~…)
+//   synced  — Desktop / Documents when "Desktop & Documents Folders" is on in iCloud
+//   other   — third-party cloud providers (Dropbox, Google Drive…) in ~/Library/CloudStorage;
+//             never offered, always skipped
+const ICLOUD_KINDS = ['drive', 'apps', 'synced'];
 
 // Never offered for deletion from the file tools, even though they're not "personal data".
 const SYSTEM_ROOTS = ['/system', '/usr', '/bin', '/sbin', '/etc', '/private/etc', '/library', '/cores', '/dev'];
@@ -56,10 +62,10 @@ function createClassifier({ home = os.homedir(), icloudSyncedFolders = [] } = {}
 
   const protectedDirs = PROTECTED_LIBRARY_DIRS.map((d) => lower(path.join(home, 'Library', d)));
   const protectedPrefixes = PROTECTED_LIBRARY_PREFIXES.map((d) => lower(path.join(home, 'Library', d)));
-  const icloudDirs = [
-    ...ICLOUD_LIBRARY_DIRS.map((d) => lower(path.join(home, 'Library', d))),
-    ...icloudSyncedFolders.map(lower),
-  ];
+  const driveDir = lower(path.join(home, 'Library', 'Mobile Documents', 'com~apple~CloudDocs'));
+  const mobileDocs = lower(path.join(home, 'Library', 'Mobile Documents'));
+  const cloudStorage = lower(path.join(home, 'Library', 'CloudStorage'));
+  const syncedDirs = icloudSyncedFolders.map(lower);
   // Folder roots that must never be deleted as a whole.
   const wholeFolderGuards = new Set(
     [home, path.join(home, 'Library'), ...['Desktop', 'Documents', 'Downloads', 'Pictures', 'Movies', 'Music', 'Applications'].map((d) => path.join(home, d))].map(lower)
@@ -78,19 +84,31 @@ function createClassifier({ home = os.homedir(), icloudSyncedFolders = [] } = {}
     else if (SYSTEM_ROOTS.some((d) => isInside(abs, d))) isProtected = true;
     else if (segments.some((s) => /\.(photoslibrary|photolibrary|migratedphotolibrary)$/.test(s))) isProtected = true;
 
-    const isICloud = icloudDirs.some((d) => isInside(abs, d));
-    return { protected: isProtected, guarded, icloud: isICloud };
+    let icloudKind = null;
+    if (isInside(abs, driveDir)) icloudKind = 'drive';
+    else if (isInside(abs, mobileDocs)) icloudKind = 'apps';
+    else if (syncedDirs.some((d) => isInside(abs, d))) icloudKind = 'synced';
+    else if (isInside(abs, cloudStorage)) icloudKind = 'other';
+    return { protected: isProtected, guarded, icloud: icloudKind !== null, icloudKind };
   }
 
-  // Skip predicate for directory walks.
-  function makeSkip({ includeICloud = false } = {}) {
+  // Skip predicate for directory walks. `kinds` is the set of iCloud aspects the user
+  // ticked; everything iCloud-related that isn't ticked is hidden from the scan.
+  function makeSkip({ kinds = [] } = {}) {
+    const allowed = new Set(kinds);
     return (p) => {
       const c = classify(p);
-      return c.protected || (c.icloud && !includeICloud);
+      return c.protected || (c.icloud && !allowed.has(c.icloudKind));
     };
   }
 
   return { classify, makeSkip, libraryPath: lib };
 }
 
-module.exports = { createClassifier };
+// UI options → list of allowed kinds. Accepts { icloud: { drive, apps, synced } }.
+function kindsFromOptions(opts) {
+  const o = opts?.icloud || {};
+  return ICLOUD_KINDS.filter((k) => o[k]);
+}
+
+module.exports = { createClassifier, kindsFromOptions, ICLOUD_KINDS };

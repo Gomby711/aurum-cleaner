@@ -20,8 +20,8 @@ contextBridge.exposeInMainWorld('api', {
     list: () => ipcRenderer.invoke('drives:list'),
   },
   quickClean: {
-    scan: () => ipcRenderer.invoke('quickClean:scan'),
-    cleanMany: (categoryIds) => ipcRenderer.invoke('quickClean:cleanMany', categoryIds),
+    scan: (opts) => ipcRenderer.invoke('quickClean:scan', opts),
+    cleanMany: (categoryIds, opts) => ipcRenderer.invoke('quickClean:cleanMany', categoryIds, opts),
     onProgress: (cb) => on('quickClean:progress', cb),
   },
   claudeCleanup: {
@@ -50,6 +50,12 @@ contextBridge.exposeInMainWorld('api', {
   },
   dialog: {
     chooseFolder: (defaultPath) => ipcRenderer.invoke('dialog:chooseFolder', defaultPath),
+  },
+  icloud: {
+    scan: (scanId, opts) => ipcRenderer.invoke('icloud:scan', scanId, opts),
+    onProgress: (cb) => on('icloud:progress', cb),
+    evict: (paths) => ipcRenderer.invoke('icloud:evict', paths),
+    openSettings: () => ipcRenderer.invoke('icloud:openSettings'),
   },
   undo: {
     list: () => ipcRenderer.invoke('undo:list'),

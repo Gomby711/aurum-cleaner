@@ -4,6 +4,7 @@ import Sidebar from './components/Sidebar';
 import WhatsNewModal from './components/WhatsNewModal';
 import UpdateBanner from './components/UpdateBanner';
 import { NotificationProvider } from './lib/notifications';
+import { ICloudProvider } from './lib/icloud';
 import { isMac, platform } from './lib/platform';
 import Dashboard from './pages/Dashboard';
 import QuickClean from './pages/QuickClean';
@@ -12,6 +13,7 @@ import LargeFiles from './pages/LargeFiles';
 import Duplicates from './pages/Duplicates';
 import ClaudeCleanup from './pages/ClaudeCleanup';
 import UndoHistory from './pages/UndoHistory';
+import ICloudCleanup from './pages/ICloudCleanup';
 import Settings from './pages/Settings';
 
 function PageSlot({ visible, children }) {
@@ -47,6 +49,7 @@ export default function App() {
 
   return (
     <NotificationProvider>
+      <ICloudProvider>
       <div style={{ display: 'flex', flexDirection: 'column', height: '100vh' }}>
         <TitleBar />
         <WhatsNewModal />
@@ -76,6 +79,11 @@ export default function App() {
               <ClaudeCleanup active={page === 'claude-cleanup'} />
             </PageSlot>
             {platform.supportsUndo && (
+              <PageSlot visible={page === 'icloud'}>
+                <ICloudCleanup active={page === 'icloud'} />
+              </PageSlot>
+            )}
+            {platform.supportsUndo && (
               <PageSlot visible={page === 'undo'}>
                 <UndoHistory active={page === 'undo'} />
               </PageSlot>
@@ -87,6 +95,7 @@ export default function App() {
           </div>
         </div>
       </div>
+      </ICloudProvider>
     </NotificationProvider>
   );
 }

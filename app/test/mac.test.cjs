@@ -44,7 +44,9 @@ test('classifier protects personal data and flags iCloud', () => {
   assert.equal(classify('/Users/sam/Movies/big.mov').protected, false);
 
   assert.equal(classify('/Users/sam/Library/Mobile Documents/com~apple~CloudDocs/a.pdf').icloud, true);
-  assert.equal(classify('/Users/sam/Library/CloudStorage/Dropbox/a.pdf').icloud, true);
+  assert.equal(classify('/Users/sam/Library/Mobile Documents/com~apple~CloudDocs/a.pdf').icloudKind, 'drive');
+  assert.equal(classify('/Users/sam/Library/Mobile Documents/iCloud~com~apple~Pages/a.pages').icloudKind, 'apps');
+  assert.equal(classify('/Users/sam/Library/CloudStorage/Dropbox/a.pdf').icloudKind, 'other');
   assert.equal(classify('/Users/sam/Movies/big.mov').icloud, false);
 
   // top-level folders can be browsed but never deleted whole
@@ -56,15 +58,20 @@ test('classifier protects personal data and flags iCloud', () => {
 test('Desktop & Documents count as iCloud when iCloud sync is on', () => {
   const { classify } = createClassifier({ home: '/Users/sam', icloudSyncedFolders: ['/Users/sam/Documents'] });
   assert.equal(classify('/Users/sam/Documents/tax.pdf').icloud, true);
+  assert.equal(classify('/Users/sam/Documents/tax.pdf').icloudKind, 'synced');
   assert.equal(classify('/Users/sam/Downloads/tax.pdf').icloud, false);
 });
 
 test('walk skip hides iCloud unless opted in, but never personal data', () => {
   const { makeSkip } = createClassifier({ home: '/Users/sam' });
-  const icloud = '/Users/sam/Library/Mobile Documents/x';
-  assert.equal(makeSkip({ includeICloud: false })(icloud), true);
-  assert.equal(makeSkip({ includeICloud: true })(icloud), false);
-  assert.equal(makeSkip({ includeICloud: true })('/Users/sam/Library/Messages'), true);
+  const drive = '/Users/sam/Library/Mobile Documents/com~apple~CloudDocs/x';
+  const appData = '/Users/sam/Library/Mobile Documents/iCloud~md~obsidian/x';
+  assert.equal(makeSkip({ kinds: [] })(drive), true);
+  assert.equal(makeSkip({ kinds: ['drive'] })(drive), false);
+  assert.equal(makeSkip({ kinds: ['drive'] })(appData), true, 'app data is a separate aspect');
+  assert.equal(makeSkip({ kinds: ['drive', 'apps'] })(appData), false);
+  assert.equal(makeSkip({ kinds: ['drive', 'apps', 'synced'] })('/Users/sam/Library/CloudStorage/Dropbox/a'), true, 'other providers never offered');
+  assert.equal(makeSkip({ kinds: ['drive'] })('/Users/sam/Library/Messages'), true);
 });
 
 test('vault stages, restores to original location, and never overwrites', async () => {
@@ -211,4 +218,118 @@ test('macOS installers go to the system Trash, not the vault', async () => {
   assert.equal(cat.dirs[0].include('Install macOS Sequoia.app'), true);
   assert.equal(cat.dirs[0].include('Safari.app'), false);
   assert.ok(classify && vault);
+});
+
+// ---------- iCloud Cleanup ----------
+const { scanICloud, findEvictable, containsCloudOnly } = require('../electron/ipc/icloudCleanup.cjs');
+
+const YEARS = 365.25 * 86400000;
+function age(p, years) {
+  const t = new Date(Date.now() - years * YEARS);
+  fs.utimesSync(p, t, t);
+}
+
+function icloudHome() {
+  const f = fakeHome();
+  const docs = path.join(f.home, 'Library', 'Mobile Documents');
+  return { ...f, docs, drive: path.join(docs, 'com~apple~CloudDocs') };
+}
+
+test('iCloud scan lists only files older than the threshold, biggest first, with containers', async () => {
+  const { home, drive, docs } = icloudHome();
+  const old1 = path.join(drive, 'Taxes', '2015.pdf');
+  const old2 = path.join(drive, 'old-video.mov');
+  const recent = path.join(drive, 'recent.pdf');
+  const appFile = path.join(docs, 'iCloud~md~obsidian', 'vault', 'note.md');
+  write(old1, 3000); write(old2, 9000); write(recent, 50000); write(appFile, 500);
+  age(old1, 8); age(old2, 6); age(recent, 1); age(appFile, 7);
+
+  const { classify } = createClassifier({ home });
+  const driveOnly = await scanICloud({ home, classify, kinds: ['drive'], olderThanYears: 5 });
+  assert.deepEqual(driveOnly.files.map((f) => f.name), ['old-video.mov', '2015.pdf']);
+  assert.equal(driveOnly.files[0].container, 'iCloud Drive');
+  assert.equal(driveOnly.summary.oldBytes, 12000);
+  assert.equal(driveOnly.summary.scannedFiles, 3, 'recent file counted as scanned but not listed');
+
+  // app data is a separate aspect and only appears when asked for
+  const withApps = await scanICloud({ home, classify, kinds: ['drive', 'apps'], olderThanYears: 5 });
+  const app = withApps.files.find((f) => f.name === 'note.md');
+  assert.equal(app.container, 'obsidian');
+  assert.equal(app.kind, 'apps');
+
+  // stricter threshold and min size
+  const strict = await scanICloud({ home, classify, kinds: ['drive'], olderThanYears: 7, minSizeBytes: 1000 });
+  assert.deepEqual(strict.files.map((f) => f.name), ['2015.pdf']);
+  // nothing ticked → nothing scanned
+  assert.equal((await scanICloud({ home, classify, kinds: [], olderThanYears: 5 })).files.length, 0);
+});
+
+test('iCloud scan treats packages as one item and flags cloud-only files', async () => {
+  const { home, drive } = icloudHome();
+  const pkg = path.join(drive, 'Report.pages');
+  write(path.join(pkg, 'Index', 'Document.iwa'), 4000);
+  write(path.join(pkg, 'Data', 'img.png'), 1000);
+  age(pkg, 6);
+
+  // a sparse file reports its full size but occupies no blocks — like an evicted iCloud file
+  const cloud = path.join(drive, 'cloud-only.zip');
+  fs.mkdirSync(drive, { recursive: true });
+  fs.writeFileSync(cloud, '');
+  fs.truncateSync(cloud, 2 * 1024 * 1024);
+  age(cloud, 9);
+  // legacy placeholder stubs are ignored
+  write(path.join(drive, '.old.icloud'), 100);
+
+  const { classify } = createClassifier({ home });
+  const { files } = await scanICloud({ home, classify, kinds: ['drive'], olderThanYears: 5 });
+  const names = files.map((f) => f.name);
+  assert.deepEqual(names.sort(), ['Report.pages', 'cloud-only.zip']);
+  const p = files.find((f) => f.name === 'Report.pages');
+  assert.equal(p.size, 5000);
+  assert.equal(p.isPackage, true);
+  assert.equal(files.find((f) => f.name === 'cloud-only.zip').cloudOnly, true);
+  assert.equal(await containsCloudOnly(cloud), true);
+  assert.equal(await containsCloudOnly(pkg), false);
+});
+
+test('iCloud scan never lists protected data', async () => {
+  const { home, drive } = icloudHome();
+  const msg = path.join(home, 'Library', 'Messages', 'chat.db');
+  write(msg, 100); age(msg, 9);
+  write(path.join(drive, 'ok.txt'), 10); age(path.join(drive, 'ok.txt'), 9);
+  const { classify } = createClassifier({ home });
+  const { files } = await scanICloud({ home, classify, kinds: ['drive', 'apps', 'synced'], olderThanYears: 5 });
+  assert.deepEqual(files.map((f) => f.name), ['ok.txt']);
+});
+
+test('evictable = downloaded iCloud Drive files untouched for a year', async () => {
+  const { home, drive } = icloudHome();
+  const stale = path.join(drive, 'stale.bin');
+  const fresh = path.join(drive, 'fresh.bin');
+  write(stale, 8192); write(fresh, 8192);
+  age(stale, 2);
+  const items = await findEvictable({ home });
+  assert.deepEqual(items.map((i) => path.basename(i.path)), ['stale.bin']);
+});
+
+test('Quick Clean offers iCloud downloads only when asked, and evicts rather than deletes', async () => {
+  const { home, tmp, vaultDir, drive } = icloudHome();
+  const stale = path.join(drive, 'stale.bin');
+  write(stale, 8192); age(stale, 2);
+  const { classify } = createClassifier({ home });
+  const evictable = () => findEvictable({ home });
+
+  const off = await scanMac({ home, tmpdir: tmp, classify });
+  assert.equal(off.some((c) => c.id === 'icloud-downloads'), false);
+  const on = await scanMac({ home, tmpdir: tmp, classify, evictable });
+  assert.equal(on.find((c) => c.id === 'icloud-downloads').fileCount, 1);
+
+  const evicted = [];
+  const r = await cleanMac(['icloud-downloads'], {
+    home, tmpdir: tmp, classify, vault: createVault(vaultDir), systemTrash: async () => {}, retentionDays: 7,
+    evict: async (p) => evicted.push(p), evictable,
+  });
+  assert.deepEqual(evicted, [stale]);
+  assert.equal(fs.existsSync(stale), true, 'file itself is never deleted');
+  assert.ok(r.freed > 0);
 });
