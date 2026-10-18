@@ -1,4 +1,5 @@
 import { motion } from 'framer-motion';
+import { platform } from '../lib/platform';
 import {
   LayoutDashboard,
   Sparkles,
@@ -6,6 +7,7 @@ import {
   FileWarning,
   Copy,
   Bot,
+  Undo2,
   Settings as SettingsIcon,
 } from 'lucide-react';
 
@@ -16,6 +18,7 @@ const NAV_ITEMS = [
   { id: 'large-files', label: 'Large Files', icon: FileWarning },
   { id: 'duplicates', label: 'Duplicates', icon: Copy },
   { id: 'claude-cleanup', label: 'Claude Cleanup', icon: Bot },
+  { id: 'undo', label: 'Undo History', icon: Undo2, macOnly: true },
   { id: 'settings', label: 'Settings', icon: SettingsIcon },
 ];
 
@@ -33,7 +36,7 @@ export default function Sidebar({ active, onChange }) {
         background: 'rgba(255,255,255,0.015)',
       }}
     >
-      {NAV_ITEMS.map((item) => {
+      {NAV_ITEMS.filter((item) => !item.macOnly || platform.supportsUndo).map((item) => {
         const isActive = active === item.id;
         const Icon = item.icon;
         return (

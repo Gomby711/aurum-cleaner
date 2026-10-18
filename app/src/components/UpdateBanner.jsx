@@ -37,6 +37,15 @@ export default function UpdateBanner() {
             <span style={{ fontSize: 12.5 }}>Downloading update v{status.version}…</span>
           </>
         )}
+        {status.state === 'manual' && (
+          <>
+            <DownloadCloud size={16} color="var(--gold-300)" />
+            <span style={{ fontSize: 12.5 }}>Version {status.version} is available</span>
+            <button className="btn btn-primary" style={{ padding: '6px 12px', fontSize: 12 }} onClick={() => window.api.updates.openReleases()}>
+              Download
+            </button>
+          </>
+        )}
         {status.state === 'ready' && (
           <>
             <CheckCircle2 size={16} color="var(--success)" />

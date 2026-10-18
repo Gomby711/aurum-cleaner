@@ -7,6 +7,7 @@ function on(channel, callback) {
 }
 
 contextBridge.exposeInMainWorld('api', {
+  platform: ipcRenderer.sendSync('platform:info'),
   app: {
     getVersion: () => ipcRenderer.invoke('app:getVersion'),
   },
@@ -20,7 +21,7 @@ contextBridge.exposeInMainWorld('api', {
   },
   quickClean: {
     scan: () => ipcRenderer.invoke('quickClean:scan'),
-    clean: (categoryId) => ipcRenderer.invoke('quickClean:clean', categoryId),
+    cleanMany: (categoryIds) => ipcRenderer.invoke('quickClean:cleanMany', categoryIds),
     onProgress: (cb) => on('quickClean:progress', cb),
   },
   claudeCleanup: {
@@ -28,28 +29,45 @@ contextBridge.exposeInMainWorld('api', {
     clean: (items) => ipcRenderer.invoke('claudeCleanup:clean', items),
   },
   diskAnalyzer: {
-    scan: (scanId, rootPath, maxDepth) => ipcRenderer.invoke('diskAnalyzer:scan', scanId, rootPath, maxDepth),
+    scan: (scanId, rootPath, maxDepth, opts) => ipcRenderer.invoke('diskAnalyzer:scan', scanId, rootPath, maxDepth, opts),
     onProgress: (cb) => on('diskAnalyzer:progress', cb),
   },
   largeFiles: {
-    scan: (scanId, rootPath, minSizeMB) => ipcRenderer.invoke('largeFiles:scan', scanId, rootPath, minSizeMB),
+    scan: (scanId, rootPath, minSizeMB, opts) => ipcRenderer.invoke('largeFiles:scan', scanId, rootPath, minSizeMB, opts),
     onProgress: (cb) => on('largeFiles:progress', cb),
   },
   duplicates: {
-    scan: (scanId, rootPath, minSizeMB) => ipcRenderer.invoke('duplicates:scan', scanId, rootPath, minSizeMB),
+    scan: (scanId, rootPath, minSizeMB, opts) => ipcRenderer.invoke('duplicates:scan', scanId, rootPath, minSizeMB, opts),
     onProgress: (cb) => on('duplicates:progress', cb),
   },
   scan: {
     cancel: (scanId) => ipcRenderer.invoke('scan:cancel', scanId),
   },
   files: {
-    trash: (paths) => ipcRenderer.invoke('files:trash', paths),
+    trash: (paths, opts) => ipcRenderer.invoke('files:trash', paths, opts),
+    classify: (paths) => ipcRenderer.invoke('files:classify', paths),
     showInFolder: (filePath) => ipcRenderer.invoke('files:showInFolder', filePath),
   },
   dialog: {
     chooseFolder: (defaultPath) => ipcRenderer.invoke('dialog:chooseFolder', defaultPath),
   },
+  undo: {
+    list: () => ipcRenderer.invoke('undo:list'),
+    details: (id) => ipcRenderer.invoke('undo:details', id),
+    restore: (id) => ipcRenderer.invoke('undo:restore', id),
+    purge: (id) => ipcRenderer.invoke('undo:purge', id),
+    purgeAll: () => ipcRenderer.invoke('undo:purgeAll'),
+  },
+  settings: {
+    get: () => ipcRenderer.invoke('settings:get'),
+    set: (patch) => ipcRenderer.invoke('settings:set', patch),
+  },
+  system: {
+    fullDiskAccess: () => ipcRenderer.invoke('system:fullDiskAccess'),
+    openFullDiskAccess: () => ipcRenderer.invoke('system:openFullDiskAccess'),
+  },
   updates: {
+    openReleases: () => ipcRenderer.invoke('updates:openReleases'),
     getWhatsNew: () => ipcRenderer.invoke('updates:getWhatsNew'),
     installNow: () => ipcRenderer.invoke('updates:installNow'),
     checkNow: () => ipcRenderer.invoke('updates:checkNow'),

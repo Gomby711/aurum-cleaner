@@ -1,9 +1,19 @@
 [
   {
+    "version": "1.1.0",
+    "date": "2026-10-18",
+    "changes": [
+      "Aurum Cleaner now runs on macOS (Apple Silicon and Intel) \u2014 download the DMG, drag it to Applications, done.",
+      "New Undo History on Mac: everything Aurum removes is kept so you can restore it with one click, or free the space for good whenever you like.",
+      "Mac Quick Clean targets only junk \u2014 app caches, logs, crash reports, old iPhone/iPad updates, leftover macOS installers, Xcode build data. Messages, Mail, Calendar, Photos and Notes are never touched.",
+      "iCloud stays in your hands: it's skipped by default, and deleting anything from iCloud asks for an extra confirmation."
+    ]
+  },
+  {
     "version": "1.0.0",
     "date": "2026-07-21",
     "changes": [
-      "Aurum Cleaner is now out of beta — first stable 1.0 release.",
+      "Aurum Cleaner is now out of beta \u2014 first stable 1.0 release.",
       "General polish and stability improvements across Quick Clean, Disk Analyzer, Large Files, Duplicates, and Claude Cleanup."
     ]
   },
@@ -11,9 +21,9 @@
     "version": "0.2.2",
     "date": "2026-07-21",
     "changes": [
-      "Disk Analyzer now lets you select/deselect files before deleting, just like Large Files and Duplicates — nothing is removed without you picking it first.",
+      "Disk Analyzer now lets you select/deselect files before deleting, just like Large Files and Duplicates \u2014 nothing is removed without you picking it first.",
       "New app icon and title bar mark.",
-      "Quick Clean, Claude Cleanup, Disk Analyzer, Large Files, and Duplicates now keep scanning or deleting in the background if you switch to another page, instead of stopping — a toast in the top-right lets you know when a job finishes while you're away.",
+      "Quick Clean, Claude Cleanup, Disk Analyzer, Large Files, and Duplicates now keep scanning or deleting in the background if you switch to another page, instead of stopping \u2014 a toast in the top-right lets you know when a job finishes while you're away.",
       "The version number in Settings now always matches the running app version."
     ]
   },
@@ -29,7 +39,7 @@
     "version": "0.2.0",
     "date": "2026-07-21",
     "changes": [
-      "Added automatic updates — Aurum Cleaner now checks for new versions on launch, downloads them in the background, and installs on restart.",
+      "Added automatic updates \u2014 Aurum Cleaner now checks for new versions on launch, downloads them in the background, and installs on restart.",
       "Added this What's New screen, shown once after every update."
     ]
   },

@@ -1,5 +1,6 @@
 import { Minus, Square, X } from 'lucide-react';
 import BrandMark from './BrandMark';
+import { isMac } from '../lib/platform';
 
 export default function TitleBar() {
   const api = window.api;
@@ -17,13 +18,14 @@ export default function TitleBar() {
         flexShrink: 0,
       }}
     >
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, paddingLeft: 14 }}>
+      {/* On macOS the native traffic lights sit at the left, so the brand moves right of them. */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, paddingLeft: isMac ? 84 : 14 }}>
         <BrandMark size={17} />
         <span style={{ fontSize: 12.5, fontWeight: 700, letterSpacing: 0.6, color: 'var(--text-1)' }}>
           AURUM <span className="gold-text">CLEANER</span>
         </span>
       </div>
-      <div style={{ display: 'flex', WebkitAppRegion: 'no-drag' }}>
+      {!isMac && <div style={{ display: 'flex', WebkitAppRegion: 'no-drag' }}>
         <TitleBtn onClick={() => api?.window.minimize()}>
           <Minus size={14} />
         </TitleBtn>
@@ -33,7 +35,7 @@ export default function TitleBar() {
         <TitleBtn onClick={() => api?.window.close()} danger>
           <X size={14} />
         </TitleBtn>
-      </div>
+      </div>}
     </div>
   );
 }

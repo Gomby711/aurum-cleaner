@@ -1,7 +1,16 @@
+import { useEffect, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { AlertTriangle } from 'lucide-react';
 
-export default function ConfirmModal({ open, title, description, confirmLabel = 'Confirm', danger, onConfirm, onCancel }) {
+// `ackLabel`, when set, adds a checkbox that must be ticked before Confirm is enabled —
+// used for the extra "yes, delete from iCloud" acknowledgement.
+export default function ConfirmModal({ open, title, description, confirmLabel = 'Confirm', danger, ackLabel, onConfirm, onCancel }) {
+  const [acked, setAcked] = useState(false);
+  useEffect(() => {
+    if (!open) setAcked(false);
+  }, [open]);
+  const blocked = !!ackLabel && !acked;
+
   return (
     <AnimatePresence>
       {open && (
@@ -52,11 +61,22 @@ export default function ConfirmModal({ open, title, description, confirmLabel = 
                 </div>
               </div>
             </div>
+            {ackLabel && (
+              <label style={{ display: 'flex', gap: 10, alignItems: 'flex-start', marginTop: 16, fontSize: 12.5, color: 'var(--text-1)', lineHeight: 1.45, cursor: 'pointer' }}>
+                <input type="checkbox" className="checkbox" checked={acked} onChange={(e) => setAcked(e.target.checked)} style={{ marginTop: 2 }} />
+                <span>{ackLabel}</span>
+              </label>
+            )}
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 22 }}>
               <button className="btn" onClick={onCancel}>
                 Cancel
               </button>
-              <button className={`btn ${danger ? 'btn-danger' : 'btn-primary'}`} onClick={onConfirm}>
+              <button
+                className={`btn ${danger ? 'btn-danger' : 'btn-primary'}`}
+                onClick={onConfirm}
+                disabled={blocked}
+                style={blocked ? { opacity: 0.45, cursor: 'not-allowed' } : undefined}
+              >
                 {confirmLabel}
               </button>
             </div>

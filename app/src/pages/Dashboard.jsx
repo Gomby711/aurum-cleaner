@@ -5,19 +5,20 @@ import DonutChart from '../components/DonutChart';
 import StatCard from '../components/StatCard';
 import PageShell from '../components/PageShell';
 import { formatBytes } from '../lib/format';
+import { isMac } from '../lib/platform';
 
 export default function Dashboard({ drives, activeDrive, onSelectDrive, onNavigate }) {
   const [breakdown, setBreakdown] = useState(null);
   const [scanning, setScanning] = useState(false);
   const [scanned, setScanned] = useState(0);
 
-  const drive = useMemo(() => drives.find((d) => d.letter === activeDrive), [drives, activeDrive]);
+  const drive = useMemo(() => drives.find((d) => d.id === activeDrive), [drives, activeDrive]);
 
   useEffect(() => {
     if (!drive) return;
     runScan();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [drive?.letter]);
+  }, [drive?.id]);
 
   async function runScan() {
     if (!drive) return;
@@ -28,7 +29,7 @@ export default function Dashboard({ drives, activeDrive, onSelectDrive, onNaviga
       if (p.scanId === scanId) setScanned(p.scanned || 0);
     });
     try {
-      const tree = await window.api.diskAnalyzer.scan(scanId, `${drive.letter}\\`, 1);
+      const tree = await window.api.diskAnalyzer.scan(scanId, drive.root, 1);
       setBreakdown(tree);
     } finally {
       unsub();
@@ -51,8 +52,8 @@ export default function Dashboard({ drives, activeDrive, onSelectDrive, onNaviga
             style={selectStyle}
           >
             {drives.map((d) => (
-              <option key={d.letter} value={d.letter}>
-                {d.letter} {d.label ? `(${d.label})` : ''}
+              <option key={d.id} value={d.id}>
+                {d.name} {d.label ? `(${d.label})` : ''}
               </option>
             ))}
           </select>
@@ -74,7 +75,7 @@ export default function Dashboard({ drives, activeDrive, onSelectDrive, onNaviga
             </div>
           </div>
 
-          <StatCard icon={HardDrive} label="Drive" value={activeDrive} sub={drive?.label || 'Local Disk'} accent />
+          <StatCard icon={HardDrive} label="Drive" value={drive?.name ?? activeDrive} sub={drive?.label || 'Local Disk'} accent />
           <StatCard
             icon={Gauge}
             label="Used %"
@@ -87,7 +88,7 @@ export default function Dashboard({ drives, activeDrive, onSelectDrive, onNaviga
           <div className="glass-panel" style={{ padding: 22, flex: '2 1 420px' }}>
             <div style={{ fontSize: 13.5, fontWeight: 700, marginBottom: 16 }}>Top-level storage breakdown</div>
             {scanning && !breakdown && (
-              <div style={{ color: 'var(--text-2)', fontSize: 13 }}>Scanning {drive?.letter}\ … {scanned} folders analyzed</div>
+              <div style={{ color: 'var(--text-2)', fontSize: 13 }}>Scanning {drive?.root} … {scanned} folders analyzed</div>
             )}
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
               {topFolders.map((f) => (
@@ -114,7 +115,7 @@ export default function Dashboard({ drives, activeDrive, onSelectDrive, onNaviga
             <ActionRow
               icon={Sparkles}
               title="Run Quick Clean"
-              desc="Temp files, caches & recycle bin"
+              desc={isMac ? "Caches, logs & old updates" : "Temp files, caches & recycle bin"}
               onClick={() => onNavigate('quick-clean')}
             />
             <ActionRow

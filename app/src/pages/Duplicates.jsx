@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { Search, Trash2, Copy, CheckCircle2, ChevronDown } from 'lucide-react';
+import { Search, Trash2, Copy, ChevronDown, Cloud } from 'lucide-react';
 import PageShell from '../components/PageShell';
 import ConfirmModal from '../components/ConfirmModal';
 import LocationBar from '../components/LocationBar';
 import { formatBytes } from '../lib/format';
 import { useNotify } from '../lib/notifications';
+import RemovedBanner from '../components/RemovedBanner';
+import { isMac, removedMessage } from '../lib/platform';
 
 export default function Duplicates({ drives, defaultRoot, active }) {
   const [root, setRoot] = useState(defaultRoot);
@@ -17,6 +18,8 @@ export default function Duplicates({ drives, defaultRoot, active }) {
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [result, setResult] = useState(null);
   const [scanId, setScanId] = useState(null);
+  const [includeICloud, setIncludeICloud] = useState(false);
+  const [icloudPaths, setIcloudPaths] = useState(new Set());
   const notify = useNotify();
   const activeRef = useRef(active);
 
@@ -39,7 +42,7 @@ export default function Duplicates({ drives, defaultRoot, active }) {
       if (p.scanId === id) setProgress(p);
     });
     try {
-      const results = await window.api.duplicates.scan(id, root, 1);
+      const results = await window.api.duplicates.scan(id, root, 1, { includeICloud });
       setGroups(results);
       // auto-select all but the first (oldest kept) file in each group
       const auto = new Set();
@@ -80,9 +83,16 @@ export default function Duplicates({ drives, defaultRoot, active }) {
   const selectedPaths = [...selected];
   const selectedSize = groups.reduce((sum, g) => sum + g.files.filter((f) => selected.has(f)).length * g.size, 0);
 
+  // Ask the main process which selected files live in iCloud so the confirm can warn about them.
+  async function askDelete() {
+    const { icloud } = await window.api.files.classify(selectedPaths);
+    setIcloudPaths(new Set(icloud));
+    setConfirmOpen(true);
+  }
+
   async function deleteSelected() {
     setConfirmOpen(false);
-    const r = await window.api.files.trash(selectedPaths);
+    const r = await window.api.files.trash(selectedPaths, { allowICloud: icloudPaths.size > 0, label: 'Duplicates' });
     setResult(r);
     setGroups((prev) =>
       prev
@@ -90,14 +100,14 @@ export default function Duplicates({ drives, defaultRoot, active }) {
         .filter((g) => g.files.length > 1)
     );
     setSelected(new Set());
-    if (!activeRef.current) notify(`Duplicates: sent ${formatBytes(r.freed)} to the Recycle Bin.`);
+    if (!activeRef.current) notify(`Duplicates: ${removedMessage(r, formatBytes).toLowerCase()}.`);
   }
 
   return (
     <PageShell title="Duplicate Files" subtitle="Find identical files wasting space and keep just one copy of each.">
       <div style={{ display: 'flex', flexDirection: 'column', height: '100%', gap: 16 }}>
         <div className="glass-panel" style={{ padding: '14px 18px', display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-          <LocationBar drives={drives} root={root} onSelectDrive={(letter) => setRoot(`${letter}\\`)} onChooseFolder={chooseFolder} disabled={scanning} />
+          <LocationBar drives={drives} root={root} onSelectDrive={(d) => setRoot(d.root)} onChooseFolder={chooseFolder} disabled={scanning} includeICloud={includeICloud} onToggleICloud={setIncludeICloud} />
           <div style={{ flex: 1 }} />
           {scanning ? (
             <button className="btn" onClick={cancelScan}>Cancel</button>
@@ -118,27 +128,14 @@ export default function Duplicates({ drives, defaultRoot, active }) {
           <div className="glass-panel" style={{ padding: '12px 18px', fontSize: 13, display: 'flex', justifyContent: 'space-between' }}>
             <span>{groups.length} duplicate group(s) found — <b>{formatBytes(wastedTotal)}</b> reclaimable</span>
             {selectedPaths.length > 0 && (
-              <button className="btn btn-danger" onClick={() => setConfirmOpen(true)}>
+              <button className="btn btn-danger" onClick={askDelete}>
                 <Trash2 size={14} /> Remove {selectedPaths.length} ({formatBytes(selectedSize)})
               </button>
             )}
           </div>
         )}
 
-        <AnimatePresence>
-          {result && (
-            <motion.div
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: 'auto' }}
-              exit={{ opacity: 0, height: 0 }}
-              className="glass-panel"
-              style={{ padding: '14px 20px', display: 'flex', alignItems: 'center', gap: 10, overflow: 'hidden' }}
-            >
-              <CheckCircle2 size={17} color="var(--success)" />
-              <span style={{ fontSize: 13 }}>Sent <b>{formatBytes(result.freed)}</b> to the Recycle Bin.</span>
-            </motion.div>
-          )}
-        </AnimatePresence>
+        <RemovedBanner result={result} />
 
         <div className="scroll-region" style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 10 }}>
           {groups.length === 0 && !scanning && (
@@ -167,6 +164,9 @@ export default function Duplicates({ drives, defaultRoot, active }) {
                       <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: idx === 0 ? 'var(--text-0)' : 'var(--text-1)' }}>
                         {f}
                       </span>
+                      {isMac && includeICloud && /Mobile Documents|CloudStorage/.test(f) && (
+                        <span className="risk-pill risk-low" style={{ display: 'inline-flex', alignItems: 'center', gap: 4, flexShrink: 0 }}><Cloud size={10} /> iCloud</span>
+                      )}
                       {idx === 0 && <span className="risk-pill risk-safe" style={{ flexShrink: 0 }}>keep suggested</span>}
                     </label>
                   ))}
@@ -179,9 +179,10 @@ export default function Duplicates({ drives, defaultRoot, active }) {
 
       <ConfirmModal
         open={confirmOpen}
-        title="Move duplicates to Recycle Bin?"
-        description={`${selectedPaths.length} duplicate file(s) totaling ${formatBytes(selectedSize)} will be moved to the Recycle Bin.`}
-        confirmLabel="Move to Recycle Bin"
+        title={isMac ? 'Remove duplicates?' : 'Move duplicates to Recycle Bin?'}
+        description={`${selectedPaths.length} duplicate file(s) totaling ${formatBytes(selectedSize)} will be ${isMac ? 'removed. You can undo this afterwards' : 'moved to the Recycle Bin'}.${icloudPaths.size > 0 ? ` ${icloudPaths.size} of them are in iCloud.` : ''}`}
+        ackLabel={icloudPaths.size > 0 ? 'I understand iCloud files are also deleted from iCloud.com and my other devices.' : undefined}
+        confirmLabel={isMac ? 'Remove' : 'Move to Recycle Bin'}
         danger
         onConfirm={deleteSelected}
         onCancel={() => setConfirmOpen(false)}
