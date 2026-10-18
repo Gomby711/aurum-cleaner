@@ -1,7 +1,7 @@
 name: Release
 
-# Pushing a tag like v1.1.0 builds the Windows installer and the macOS DMG/ZIP and
-# attaches them to a draft GitHub release. Publish the draft to ship it.
+# Builds the Windows installer and the macOS DMG/ZIP and attaches both to one GitHub
+# release. Run it from the Actions tab, or push a tag like v1.1.0.
 on:
   push:
     tags: ['v*']
@@ -10,18 +10,33 @@ on:
 permissions:
   contents: write
 
+defaults:
+  run:
+    working-directory: app
+
+env:
+  GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
 jobs:
-  build:
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [windows-latest, macos-latest]
-    runs-on: ${{ matrix.os }}
-    defaults:
-      run:
-        working-directory: app
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+      - run: npm ci
+      - run: npm run build
+      - run: npx electron-builder --win --publish always
+
+  # Runs after Windows so both builds upload to the same release instead of racing
+  # to create two.
+  macos:
+    needs: windows
+    runs-on: macos-latest
     env:
-      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       # True only when a Developer ID certificate secret exists (see README → Releasing).
       HAS_APPLE_CERT: ${{ secrets.MAC_CERT_P12_BASE64 != '' }}
     steps:
@@ -32,18 +47,11 @@ jobs:
           cache: npm
           cache-dependency-path: app/package-lock.json
       - run: npm ci
+      - run: npm test
       - run: npm run build
 
-      - name: Build and publish (Windows)
-        if: runner.os == 'Windows'
-        run: npx electron-builder --win --publish always
-
-      - name: Test (macOS)
-        if: runner.os == 'macOS'
-        run: npm test
-
-      - name: Build and publish (macOS, signed + notarized)
-        if: runner.os == 'macOS' && env.HAS_APPLE_CERT == 'true'
+      - name: Build and publish (signed + notarized)
+        if: env.HAS_APPLE_CERT == 'true'
         run: npx electron-builder --mac --publish always -c.mac.notarize=true
         # Only set here: an empty CSC_LINK makes electron-builder fail instead of skipping signing.
         env:
@@ -53,19 +61,16 @@ jobs:
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
 
-      - name: Build and publish (macOS, ad-hoc signed)
-        if: runner.os == 'macOS' && env.HAS_APPLE_CERT != 'true'
+      - name: Build and publish (ad-hoc signed)
+        if: env.HAS_APPLE_CERT != 'true'
         run: npx electron-builder --mac --publish always
 
-  # Both builds attach to one draft release; once they've both succeeded, publish it.
   publish:
-    needs: build
+    needs: macos
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - name: Publish the release
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           VERSION=$(node -p "require('./app/package.json').version")
           gh release edit "v${VERSION}" --draft=false --latest --repo "${{ github.repository }}"
